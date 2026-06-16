@@ -48,12 +48,20 @@ HDR_DATE = "#20124d"    # date headers (dark navy, white text)
 st.markdown(
     """
     <style>
-      /* trim Streamlit's large default space above the title */
+      /* remove Streamlit's large default space above the title */
       .block-container,
       [data-testid="stMainBlockContainer"],
       [data-testid="stAppViewBlockContainer"] {
-          padding-top: 1.2rem !important; }
-      header[data-testid="stHeader"] { height: 2.2rem; }
+          padding-top: 0.5rem !important; }
+      header[data-testid="stHeader"] { display: none; }
+
+      /* freeze the title + the Overall/Day/Week/Month tabs while scrolling */
+      [data-testid="stElementContainer"]:has(.dash-title) {
+          position: sticky; top: 0; z-index: 101;
+          background: var(--background-color, #ffffff); padding-top: 0.2rem; }
+      div[data-baseweb="tab-list"] {
+          position: sticky; top: 2.4rem; z-index: 100;
+          background: var(--background-color, #ffffff); }
 
       /* big, scrollable viewport with frozen header (top) + frozen label cols (left) */
       .sheet-wrap { overflow:auto; max-height:88vh; border:1px solid #6b7280;
@@ -401,8 +409,8 @@ label_w = st.sidebar.slider(
 if hub in raw_sheets:
     rs = raw_sheets[hub]
     st.markdown(
-        f"<h2 style='text-align:center;font-weight:800;font-size:1.6rem;"
-        f"margin:0.1rem 0 0.7rem'>{hub}</h2>",
+        f"<h2 class='dash-title' style='text-align:center;font-weight:800;"
+        f"font-size:1.6rem;margin:0.1rem 0 0.5rem'>{hub}</h2>",
         unsafe_allow_html=True,
     )
     st.markdown(render_raw(rs["values"], rs["colors"], rs["frozen"], font_rem,
@@ -444,8 +452,8 @@ st.sidebar.caption(
 # Header — centered, compact title only
 # --------------------------------------------------------------------------- #
 st.markdown(
-    f"<h2 style='text-align:center;font-weight:800;font-size:1.6rem;"
-    f"margin:0.1rem 0 0.7rem'>{hub}</h2>",
+    f"<h2 class='dash-title' style='text-align:center;font-weight:800;"
+    f"font-size:1.6rem;margin:0.1rem 0 0.5rem'>{hub}</h2>",
     unsafe_allow_html=True,
 )
 
