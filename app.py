@@ -48,6 +48,13 @@ HDR_DATE = "#20124d"    # date headers (dark navy, white text)
 st.markdown(
     """
     <style>
+      /* trim Streamlit's large default space above the title */
+      .block-container,
+      [data-testid="stMainBlockContainer"],
+      [data-testid="stAppViewBlockContainer"] {
+          padding-top: 1.2rem !important; }
+      header[data-testid="stHeader"] { height: 2.2rem; }
+
       /* big, scrollable viewport with frozen header (top) + frozen label cols (left) */
       .sheet-wrap { overflow:auto; max-height:88vh; border:1px solid #6b7280;
                     border-radius:6px; }
