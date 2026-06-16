@@ -16,6 +16,6 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Optional: uncomment to keep the company data snapshot out of the repo.
+# Company data snapshot stays local only (never pushed to GitHub).
 # Live mode (configured via Streamlit Cloud secrets) does not need it.
-# data/snapshot.csv
+data/snapshot.csv

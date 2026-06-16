@@ -326,9 +326,15 @@ def render_raw(values, colors, frozen=(1, 1), font_rem: float = 0.9,
 st.sidebar.title("📦 MH Performance Dashboard")
 
 has_secrets = _has_service_account()
-source_options = ["Snapshot (bundled CSV)"]
+source_options = []
 if has_secrets:
-    source_options.insert(0, "Live (Google Sheets)")
+    source_options.append("Live (Google Sheets)")
+if dl.SNAPSHOT_PATH.exists():
+    source_options.append("Snapshot (bundled CSV)")
+if not source_options:
+    st.error("No data source available. Configure a service account (live mode) "
+             "or provide data/snapshot.csv.")
+    st.stop()
 source = st.sidebar.radio("Data source", source_options, index=0)
 if not has_secrets:
     st.sidebar.caption("💡 Add a service account to enable live mode (see README).")
