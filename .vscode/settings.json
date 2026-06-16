@@ -1,0 +1,5 @@
+{
+  // Make the integrated terminal open in the dashboard folder.
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "python.terminal.activateEnvironment": true
+}

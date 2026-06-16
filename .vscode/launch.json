@@ -1,0 +1,16 @@
+{
+  // Press F5 (or Run ▸ Start Debugging) to launch the dashboard.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Streamlit dashboard",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "args": ["run", "app.py"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

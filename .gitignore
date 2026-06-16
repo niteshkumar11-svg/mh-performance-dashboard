@@ -1,0 +1,21 @@
+# ---- NEVER commit credentials ----
+.streamlit/secrets.toml
+
+# Local run artifacts
+run.log
+run.err
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Optional: uncomment to keep the company data snapshot out of the repo.
+# Live mode (configured via Streamlit Cloud secrets) does not need it.
+# data/snapshot.csv
