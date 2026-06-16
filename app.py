@@ -393,9 +393,11 @@ label_w = st.sidebar.slider(
 # --------------------------------------------------------------------------- #
 if hub in raw_sheets:
     rs = raw_sheets[hub]
-    st.title(f"📋 {hub}")
-    st.caption(f"Source: **{source}** · Rendered with the sheet's own "
-               f"colours & formatting.")
+    st.markdown(
+        f"<h2 style='text-align:center;font-weight:800;font-size:1.6rem;"
+        f"margin:0.1rem 0 0.7rem'>{hub}</h2>",
+        unsafe_allow_html=True,
+    )
     st.markdown(render_raw(rs["values"], rs["colors"], rs["frozen"], font_rem,
                            cell_w=cell_w, merges=rs.get("merges"), label_w=label_w),
                 unsafe_allow_html=True)
@@ -432,12 +434,13 @@ st.sidebar.caption(
 )
 
 # --------------------------------------------------------------------------- #
-# Header
+# Header — centered, compact title only
 # --------------------------------------------------------------------------- #
-st.title(f"📊 {hub}")
-st.caption(f"Source: **{source}** · Rendered with the sheet's own colours & "
-           f"merged cells · Latest day: **{all_dates[-1]:%d %b %Y}**"
-           if all_dates else f"Source: {source}")
+st.markdown(
+    f"<h2 style='text-align:center;font-weight:800;font-size:1.6rem;"
+    f"margin:0.1rem 0 0.7rem'>{hub}</h2>",
+    unsafe_allow_html=True,
+)
 
 if not all_dates:
     st.warning("No dated data for this tab.")
@@ -451,10 +454,8 @@ tab_over, tab_day, tab_week, tab_month = st.tabs(
 # 🗂️ OVERALL — most recent N days
 # --------------------------------------------------------------------------- #
 with tab_over:
-    st.subheader("Overall — most recent 4 days")
     ndays = min(4, len(all_dates))
     recent = all_dates[-ndays:]
-    st.caption(f"{recent[0]:%d %b} → {recent[-1]:%d %b %Y}  ·  {len(recent)} days")
     st.markdown(render_sheet(hub_df, recent, frozen_cols=frozen_cols,
                              font_rem=font_rem, cell_w=cell_w, label_w=label_w),
                 unsafe_allow_html=True)
@@ -467,7 +468,6 @@ with tab_over:
 # 📅 DAY
 # --------------------------------------------------------------------------- #
 with tab_day:
-    st.subheader("Single day — all metrics")
     sel_day = st.selectbox(
         "Pick a date", list(reversed(all_dates)),
         format_func=lambda d: pd.Timestamp(d).strftime("%A, %d %b %Y"),
@@ -488,8 +488,6 @@ with tab_day:
                     bg = "#d9ead3" if diff > 0 else "#f4cccc"   # green up / red down
                     delta_map[int(r["Order"])] = (txt, bg)
 
-    st.caption(f"Comparing against **{prev_day:%d %b %Y}**"
-               if prev_day is not None else "No earlier day to compare.")
     st.markdown(render_sheet(hub_df, [sel_day], delta_map=delta_map,
                              frozen_cols=frozen_cols, font_rem=font_rem,
                              cell_w=cell_w, label_w=label_w), unsafe_allow_html=True)
@@ -498,7 +496,6 @@ with tab_day:
 # 🗓️ WEEK
 # --------------------------------------------------------------------------- #
 with tab_week:
-    st.subheader("Weekly — date-wise data")
     week_keys = sorted({(int(d.isocalendar().year), int(d.isocalendar().week))
                         for d in all_dates}, reverse=True)
 
@@ -512,7 +509,6 @@ with tab_week:
     sel_week = st.selectbox("Pick a week number", week_keys, format_func=week_label)
     wk_days = [d for d in all_dates
                if (int(d.isocalendar().year), int(d.isocalendar().week)) == sel_week]
-    st.caption(f"{week_label(sel_week)}  ·  {len(wk_days)} day(s)")
     st.markdown(render_sheet(hub_df, wk_days, frozen_cols=frozen_cols,
                              font_rem=font_rem, cell_w=cell_w, label_w=label_w),
                 unsafe_allow_html=True)
@@ -521,15 +517,12 @@ with tab_week:
 # 📆 MONTH
 # --------------------------------------------------------------------------- #
 with tab_month:
-    st.subheader("Monthly — date-wise data")
     month_keys = sorted({(d.year, d.month) for d in all_dates}, reverse=True)
     sel_month = st.selectbox(
         "Pick a month", month_keys,
         format_func=lambda k: pd.Timestamp(year=k[0], month=k[1], day=1).strftime("%B %Y"),
     )
     mo_days = [d for d in all_dates if (d.year, d.month) == sel_month]
-    st.caption(f"{pd.Timestamp(year=sel_month[0], month=sel_month[1], day=1):%B %Y}"
-               f"  ·  {len(mo_days)} day(s)")
     st.markdown(render_sheet(hub_df, mo_days, frozen_cols=frozen_cols,
                              font_rem=font_rem, cell_w=cell_w, label_w=label_w),
                 unsafe_allow_html=True)
