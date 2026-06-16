@@ -24,6 +24,12 @@ import streamlit as st
 
 import data_loader as dl
 
+try:
+    from streamlit_autorefresh import st_autorefresh
+    _HAS_AUTOREFRESH = True
+except Exception:  # noqa: BLE001 — graceful if the package isn't installed
+    _HAS_AUTOREFRESH = False
+
 # --------------------------------------------------------------------------- #
 # Page setup
 # --------------------------------------------------------------------------- #
@@ -74,7 +80,9 @@ st.markdown(
 # Data access (cached)
 # --------------------------------------------------------------------------- #
 @st.cache_data(ttl=900, show_spinner="Loading data…")
-def get_data(source: str) -> pd.DataFrame:
+def get_data(source: str, tick: int = 0) -> tuple:
+    # `tick` is part of the cache key: when the auto-refresh timer increments it,
+    # the cache misses and data is re-fetched live from the sheet.
     if source == "Live (Google Sheets)":
         sa = dict(st.secrets["gcp_service_account"])
         return dl.load_live(sa)              # hidden tabs skipped inside loader
@@ -325,11 +333,22 @@ source = st.sidebar.radio("Data source", source_options, index=0)
 if not has_secrets:
     st.sidebar.caption("💡 Add a service account to enable live mode (see README).")
 
-if st.sidebar.button("🔄 Refresh data"):
+if st.sidebar.button("🔄 Refresh data now"):
     get_data.clear()
 
+# Auto-refresh: soft rerun on a timer (preserves selections) that re-pulls data
+_RF = {"Off": 0, "30 sec": 30, "1 min": 60, "5 min": 300}
+rf_choice = st.sidebar.selectbox("⏱️ Auto-refresh", list(_RF), index=2)
+rf_sec = _RF[rf_choice]
+tick = 0
+if rf_sec and _HAS_AUTOREFRESH:
+    tick = st_autorefresh(interval=rf_sec * 1000, key="auto_rf")
+    st.sidebar.caption(f"🟢 Live — refreshing every {rf_choice}.")
+elif rf_sec:
+    st.sidebar.caption("⚠️ `streamlit-autorefresh` not installed — using manual refresh.")
+
 try:
-    data, raw_sheets = get_data(source)
+    data, raw_sheets = get_data(source, tick=tick)
 except Exception as exc:  # noqa: BLE001
     st.error(f"Could not load data from **{source}**.\n\n```\n{exc}\n```")
     st.stop()
