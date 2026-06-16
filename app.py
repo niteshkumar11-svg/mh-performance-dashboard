@@ -53,14 +53,16 @@ st.markdown(
       [data-testid="stMainBlockContainer"],
       [data-testid="stAppViewBlockContainer"] {
           padding-top: 0.5rem !important; }
-      header[data-testid="stHeader"] { display: none; }
+      /* keep the header slim (not hidden) so the sidebar toggle stays available */
+      header[data-testid="stHeader"] {
+          height: 2.6rem; background: transparent; backdrop-filter: none; }
 
       /* freeze the title + the Overall/Day/Week/Month tabs while scrolling */
       [data-testid="stElementContainer"]:has(.dash-title) {
-          position: sticky; top: 0; z-index: 101;
+          position: sticky; top: 2.6rem; z-index: 101;
           background: var(--background-color, #ffffff); padding-top: 0.2rem; }
       div[data-baseweb="tab-list"] {
-          position: sticky; top: 2.4rem; z-index: 100;
+          position: sticky; top: 5.0rem; z-index: 100;
           background: var(--background-color, #ffffff); }
 
       /* big, scrollable viewport with frozen header (top) + frozen label cols (left) */
