@@ -97,7 +97,9 @@ st.markdown(
           box-shadow:0 1px 4px rgba(16,42,74,.08); }
       table.sheet { border-collapse:separate; border-spacing:0; width:auto;
           font-size:var(--fs,0.9rem); font-family:'Inter', system-ui, sans-serif; }
-      table.sheet.fit  { width:100%; }              /* metrics table: fill the page */
+      /* metrics table: fill the page; fixed layout makes column widths
+         authoritative so BOTH header and data cells wrap when narrowed */
+      table.sheet.fit  { width:100%; table-layout:fixed; }
       table.sheet.wide { min-width:max-content; }    /* raw sheets: size to content */
       /* all borders, text wraps */
       table.sheet th, table.sheet td {
@@ -111,6 +113,7 @@ st.markdown(
       table.sheet td.charter { font-weight:700; color:#1e3a8a; }
       table.sheet td.num, table.sheet thead th.num {
           font-variant-numeric:tabular-nums;
+          overflow-wrap:normal; word-break:normal;   /* never split a number */
           min-width:var(--cw,3.2em); width:var(--cw,3.2em); }
     </style>
     """,
@@ -176,8 +179,10 @@ def _frozen_style(pos: int, frozen_cols: int, is_header: bool, bg: str,
         return ""
     left = round(sum(_FROZEN_W[:pos]) * scale, 2)
     w = round(_FROZEN_W[pos] * scale, 2)
+    # set `width` too (not just min/max) so table-layout:fixed honours it and
+    # wraps the data cells, not only the header
     s = (f"position:sticky;left:{left}em;"
-         f"min-width:{w}em;max-width:{w}em;"
+         f"width:{w}em;min-width:{w}em;max-width:{w}em;"
          f"z-index:{4 if is_header else 1};")
     if not bg:                       # opaque so scrolled cells don't show through
         s += "background-color:#ffffff;"
@@ -428,7 +433,7 @@ font_rem = st.sidebar.slider(
 )
 cell_w = st.sidebar.slider(
     "↔️ Data cell width", min_value=2.5, max_value=14.0,
-    value=7.0 if hub in raw_sheets else 3.5, step=0.5,
+    value=7.0 if hub in raw_sheets else 5.0, step=0.5,
     help="Widen or narrow the metric/date data columns in real time.",
 )
 label_w = st.sidebar.slider(
