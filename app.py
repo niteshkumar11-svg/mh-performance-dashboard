@@ -48,39 +48,57 @@ HDR_DATE = "#20124d"    # date headers (dark navy, white text)
 st.markdown(
     """
     <style>
-      /* remove Streamlit's large default space above the title */
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+      :root { --accent:#1f6feb; --accent-dark:#1a5fd0; --ink:#102a4a;
+              --line:#dbe2ea; --panel:#ffffff; }
+      html, body, [data-testid="stAppViewContainer"] {
+          font-family:'Inter', system-ui, sans-serif; }
+
+      /* full-width content with minimal space at the very top */
       .block-container,
       [data-testid="stMainBlockContainer"],
       [data-testid="stAppViewBlockContainer"] {
-          padding-top: 0.5rem !important; }
-      /* keep the header slim (not hidden) so the sidebar toggle stays available */
+          max-width:100% !important; padding:0.35rem 1.4rem 0.8rem !important; }
+      /* slim, transparent header so the sidebar toggle stays available */
       header[data-testid="stHeader"] {
-          height: 2.6rem; background: transparent; backdrop-filter: none; }
+          height:2.2rem; background:transparent; backdrop-filter:none; }
 
-      /* freeze the title + the Overall/Day/Week/Month tabs while scrolling */
-      [data-testid="stElementContainer"]:has(.dash-title) {
-          position: sticky; top: 2.6rem; z-index: 101;
-          background: var(--background-color, #ffffff); padding-top: 0.2rem; }
-      div[data-baseweb="tab-list"] {
-          position: sticky; top: 5.0rem; z-index: 100;
-          background: var(--background-color, #ffffff); }
+      /* centered hub title with a small accent underline (not sticky -> no overlap) */
+      .hub-title { text-align:center; font-weight:800; font-size:1.7rem;
+          color:var(--ink); letter-spacing:.3px; margin:.1rem 0 .2rem; }
+      .hub-title .accent { display:block; width:64px; height:4px; border-radius:3px;
+          margin:.35rem auto 0; background:linear-gradient(90deg,var(--accent),#7aa7ff); }
 
-      /* big, scrollable viewport with frozen header (top) + frozen label cols (left) */
-      .sheet-wrap { overflow:auto; max-height:88vh; border:1px solid #6b7280;
-                    border-radius:6px; }
+      /* tabs */
+      [data-baseweb="tab-list"] { gap:.35rem; border-bottom:1px solid var(--line); }
+      [data-baseweb="tab"] { font-weight:600; color:#5b6b7d; }
+      [data-baseweb="tab"][aria-selected="true"] { color:var(--accent); }
+      [data-baseweb="tab-highlight"] { background:var(--accent) !important; height:3px; }
+
+      /* buttons */
+      .stButton > button { background:var(--accent); color:#fff; border:0;
+          border-radius:8px; font-weight:600; transition:.15s; }
+      .stButton > button:hover { background:var(--accent-dark); color:#fff; }
+
+      /* sidebar */
+      [data-testid="stSidebar"] { background:#f7f9fc; border-right:1px solid var(--line); }
+
+      /* Only the TABLE scrolls (fills the page), so the title/tabs above never
+         scroll away and never overlap the data. */
+      .sheet-wrap { overflow:auto; max-height:calc(100vh - 12.5rem);
+          border:1px solid var(--line); border-radius:10px;
+          box-shadow:0 1px 4px rgba(16,42,74,.08); }
       table.sheet { border-collapse:separate; border-spacing:0; width:auto;
-                    font-size:var(--fs,0.9rem);
-                    font-family:'Segoe UI', system-ui, sans-serif; }
-      table.sheet.fit  { width:100%; }              /* metrics table: fit one pane */
+          font-size:var(--fs,0.9rem); font-family:'Inter', system-ui, sans-serif; }
+      table.sheet.fit  { width:100%; }              /* metrics table: fill the page */
       table.sheet.wide { min-width:max-content; }    /* raw sheets: size to content */
-      /* "all borders": every cell fully boxed on all four sides; text wraps */
+      /* all borders, text wraps */
       table.sheet th, table.sheet td {
-          border:1px solid #8a93a0; padding:7px 12px;
+          border:1px solid #d8dee6; padding:7px 12px;
           text-align:center; vertical-align:middle;
           white-space:normal; overflow-wrap:anywhere; }
       table.sheet.wide th, table.sheet.wide td {
-          white-space:nowrap; overflow-wrap:normal;
-          min-width:var(--cw,6em); }
+          white-space:nowrap; overflow-wrap:normal; min-width:var(--cw,6em); }
       table.sheet thead th { position:sticky; top:0; z-index:2; font-weight:700; }
       table.sheet td.metric { font-weight:600; }
       table.sheet td.charter { font-weight:700; color:#1e3a8a; }
@@ -340,7 +358,7 @@ def render_raw(values, colors, frozen=(1, 1), font_rem: float = 0.9,
 # --------------------------------------------------------------------------- #
 # Sidebar — source, hub, charter filter
 # --------------------------------------------------------------------------- #
-st.sidebar.title("📦 MH Performance Dashboard")
+st.sidebar.title("⚙️ Controls")
 
 has_secrets = _has_service_account()
 source_options = []
@@ -356,17 +374,13 @@ source = st.sidebar.radio("Data source", source_options, index=0)
 if not has_secrets:
     st.sidebar.caption("💡 Add a service account to enable live mode (see README).")
 
-if st.sidebar.button("🔄 Refresh data now"):
-    get_data.clear()
-
-# Auto-refresh: soft rerun on a timer (preserves selections) that re-pulls data
+# Auto-refresh: soft rerun on a timer (must run before get_data so `tick` is set)
 _RF = {"Off": 0, "30 sec": 30, "1 min": 60, "5 min": 300}
 rf_choice = st.sidebar.selectbox("⏱️ Auto-refresh", list(_RF), index=2)
 rf_sec = _RF[rf_choice]
 tick = 0
 if rf_sec and _HAS_AUTOREFRESH:
     tick = st_autorefresh(interval=rf_sec * 1000, key="auto_rf")
-    st.sidebar.caption(f"🟢 Live — refreshing every {rf_choice}.")
 elif rf_sec:
     st.sidebar.caption("⚠️ `streamlit-autorefresh` not installed — using manual refresh.")
 
@@ -383,12 +397,19 @@ if not all_tabs:
     st.warning("No data found.")
     st.stop()
 
-st.sidebar.divider()
-hub = st.sidebar.selectbox(
-    "Tab (sheet)", all_tabs, index=0,
+# ---- Main page: sheet picker + refresh button (top of page) ----
+pick_col, rf_col = st.columns([6, 1], vertical_alignment="bottom")
+hub = pick_col.selectbox(
+    "Sheet / Tab", all_tabs, key="hub_select",
     help="Only tabs that are visible (unhidden) in the sheet are listed.",
 )
+if rf_col.button("🔄 Refresh", use_container_width=True):
+    get_data.clear()
+    st.rerun()
+if rf_sec and _HAS_AUTOREFRESH:
+    st.caption(f"🟢 Live — auto-refreshing every {rf_choice}.")
 
+# ---- Sidebar display controls (hub is known now) ----
 st.sidebar.divider()
 font_rem = st.sidebar.slider(
     "🔠 Table font size", min_value=0.6, max_value=1.5, value=0.9, step=0.05,
@@ -405,16 +426,15 @@ label_w = st.sidebar.slider(
          "Keep this small so the data columns stay prominent.",
 )
 
+# ---- Centered hub title (shared by both views; not sticky -> no overlap) ----
+st.markdown(f"<div class='hub-title'>{hub}<span class='accent'></span></div>",
+            unsafe_allow_html=True)
+
 # --------------------------------------------------------------------------- #
 # RAW (non-Charter) sheet view — e.g. BRSNR, Arkham Pendency View
 # --------------------------------------------------------------------------- #
 if hub in raw_sheets:
     rs = raw_sheets[hub]
-    st.markdown(
-        f"<h2 class='dash-title' style='text-align:center;font-weight:800;"
-        f"font-size:1.6rem;margin:0.1rem 0 0.5rem'>{hub}</h2>",
-        unsafe_allow_html=True,
-    )
     st.markdown(render_raw(rs["values"], rs["colors"], rs["frozen"], font_rem,
                            cell_w=cell_w, merges=rs.get("merges"), label_w=label_w),
                 unsafe_allow_html=True)
@@ -450,21 +470,12 @@ st.sidebar.caption(
     f"{all_dates[0]:%d %b} → {all_dates[-1]:%d %b %Y}" if all_dates else f"**{hub}**"
 )
 
-# --------------------------------------------------------------------------- #
-# Header — centered, compact title only
-# --------------------------------------------------------------------------- #
-st.markdown(
-    f"<h2 class='dash-title' style='text-align:center;font-weight:800;"
-    f"font-size:1.6rem;margin:0.1rem 0 0.5rem'>{hub}</h2>",
-    unsafe_allow_html=True,
-)
-
 if not all_dates:
     st.warning("No dated data for this tab.")
     st.stop()
 
 tab_over, tab_day, tab_week, tab_month = st.tabs(
-    ["🗂️ Overall", "📅 Day", "🗓️ Week", "📆 Month"]
+    ["Overall", "Day", "Week", "Month"]
 )
 
 # --------------------------------------------------------------------------- #
