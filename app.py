@@ -34,7 +34,7 @@ except Exception:  # noqa: BLE001 — graceful if the package isn't installed
 # Page setup
 # --------------------------------------------------------------------------- #
 st.set_page_config(
-    page_title="MH Performance Dashboard",
+    page_title="BJOC - All In One Dashboard",
     page_icon="📦",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -63,11 +63,18 @@ st.markdown(
       header[data-testid="stHeader"] {
           height:2.2rem; background:transparent; backdrop-filter:none; }
 
+      /* highlighted app banner at the top of the main page */
+      .app-banner { text-align:center; font-weight:800; font-size:1.7rem;
+          letter-spacing:1.5px; color:#fff; padding:.75rem 1rem; border-radius:14px;
+          margin:.1rem 0 .7rem;
+          background:linear-gradient(135deg,#1f6feb 0%,#4f46e5 55%,#7c3aed 100%);
+          box-shadow:0 4px 14px rgba(31,111,235,.28); }
+
       /* centered hub title with a small accent underline (not sticky -> no overlap) */
-      .hub-title { text-align:center; font-weight:800; font-size:1.7rem;
+      .hub-title { text-align:center; font-weight:800; font-size:1.45rem;
           color:var(--ink); letter-spacing:.3px; margin:.1rem 0 .2rem; }
       .hub-title .accent { display:block; width:64px; height:4px; border-radius:3px;
-          margin:.35rem auto 0; background:linear-gradient(90deg,var(--accent),#7aa7ff); }
+          margin:.3rem auto 0; background:linear-gradient(90deg,var(--accent),#7aa7ff); }
 
       /* tabs */
       [data-baseweb="tab-list"] { gap:.35rem; border-bottom:1px solid var(--line); }
@@ -358,7 +365,7 @@ def render_raw(values, colors, frozen=(1, 1), font_rem: float = 0.9,
 # --------------------------------------------------------------------------- #
 # Sidebar — source, hub, charter filter
 # --------------------------------------------------------------------------- #
-st.sidebar.title("⚙️ Controls")
+st.sidebar.markdown("##### ⚙️ Controls")
 
 has_secrets = _has_service_account()
 source_options = []
@@ -396,6 +403,10 @@ all_tabs = charter_hubs + raw_titles
 if not all_tabs:
     st.warning("No data found.")
     st.stop()
+
+# ---- Main page: highlighted app banner ----
+st.markdown("<div class='app-banner'>BJOC&nbsp;-&nbsp;ALL IN ONE DASHBOARD</div>",
+            unsafe_allow_html=True)
 
 # ---- Main page: sheet picker + refresh button (top of page) ----
 pick_col, rf_col = st.columns([6, 1], vertical_alignment="bottom")
