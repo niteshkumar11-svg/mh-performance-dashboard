@@ -1,19 +1,24 @@
 """
 BJOC - All In One Dashboard  ·  Streamlit
 =========================================
-Every tab in the Google Sheet is a *metric* named ``<Metric>-<Function>``
-(function = FC or MH). Navigation:
+Each tab in the Google Sheet is a metric named ``<Metric>-<Function>``
+(function = FC, MH, or anything you add). Staged navigation:
 
-    pick a Function (FC / MH)  ->  pick a Metric  ->  its table renders
+    1. Two big buttons (FC / MH ...) — nothing selected by default.
+    2. Click one  -> it shrinks, the function's metric buttons animate in.
+    3. Click a metric -> buttons shrink small, the table animates in.
 
-Tables are reproduced faithfully (sheet colours, merged cells, frozen panes),
-and only the selected tab's data is fetched (on demand) so it stays fast.
+Date-based tables also get Overall / Week / Month views (latest date first).
+Tables reproduce the sheet faithfully (colours, merges) and use the sheet's
+own freeze settings (nothing is frozen by default). New tabs/functions added
+to the sheet appear automatically (live read + auto-refresh) — no code change.
 
 Run:  streamlit run app.py
 """
 
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 import data_loader as dl
@@ -34,84 +39,86 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-HDR_LABEL = "#a4c2f4"   # fallback header colour for cells with no fill
+HDR_LABEL = "#a4c2f4"
 
 st.markdown(
     """
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
       :root { --accent:#1f6feb; --accent2:#4f46e5; --ink:#102a4a; --line:#dbe2ea; }
-      html, body, [data-testid="stAppViewContainer"] {
-          font-family:'Inter', system-ui, sans-serif; }
+      html, body, [data-testid="stAppViewContainer"] { font-family:'Inter', system-ui, sans-serif; }
 
-      /* full-width content, minimal top space */
-      .block-container,
-      [data-testid="stMainBlockContainer"],
-      [data-testid="stAppViewBlockContainer"] {
-          max-width:100% !important; padding:0.3rem 1.2rem 0.6rem !important; }
-      header[data-testid="stHeader"] {
-          height:2.2rem; background:transparent; backdrop-filter:none; }
-      [data-testid="stSidebar"] { background:#f7f9fc; border-right:1px solid var(--line); }
+      .block-container,[data-testid="stMainBlockContainer"],[data-testid="stAppViewBlockContainer"]{
+          max-width:100% !important; padding:0.3rem 1.2rem 0.5rem !important; }
+      header[data-testid="stHeader"]{ height:2.2rem; background:transparent; backdrop-filter:none; }
+      [data-testid="stSidebar"]{ background:#f7f9fc; border-right:1px solid var(--line); }
 
-      /* highlighted app banner */
-      .app-banner { text-align:center; font-weight:800; font-size:1.6rem;
-          letter-spacing:1.5px; color:#fff; padding:.65rem 1rem; border-radius:14px;
-          margin:.1rem 0 .55rem;
+      .app-banner{ text-align:center; font-weight:800; font-size:1.55rem; letter-spacing:1.5px;
+          color:#fff; padding:.6rem 1rem; border-radius:14px; margin:.1rem 0 .5rem;
           background:linear-gradient(135deg,#1f6feb 0%,#4f46e5 55%,#7c3aed 100%);
           box-shadow:0 4px 14px rgba(31,111,235,.28); }
-
-      /* section labels + selected-metric title */
-      .sec-label { font-weight:700; color:#64748b; font-size:.8rem;
-          letter-spacing:.8px; text-transform:uppercase; margin:.2rem 0 .1rem; }
-      .metric-title { text-align:center; font-weight:800; font-size:1.3rem;
-          color:var(--ink); margin:.5rem 0 .3rem; animation:fadeInUp .4s ease both; }
-      .metric-title .accent { display:block; width:60px; height:4px; border-radius:3px;
-          margin:.3rem auto 0; background:linear-gradient(90deg,var(--accent),#7aa7ff); }
-      .hint { text-align:center; color:#7b8794; padding:1.4rem; font-size:1.02rem;
+      .sec-label{ font-weight:700; color:#64748b; font-size:.75rem; letter-spacing:.8px;
+          text-transform:uppercase; margin:.35rem 0 .15rem; }
+      .metric-title{ text-align:center; font-weight:800; font-size:1.15rem; color:var(--ink);
+          margin:.3rem 0 .2rem; animation:fadeInUp .4s ease both; }
+      .metric-title .accent{ display:block; width:54px; height:3px; border-radius:3px;
+          margin:.25rem auto 0; background:linear-gradient(90deg,var(--accent),#7aa7ff); }
+      .hint{ text-align:center; color:#7b8794; padding:1.2rem; font-size:1.05rem;
           animation:fadeInUp .4s ease both; }
 
-      /* animations */
-      @keyframes fadeInUp { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
-      @keyframes popIn   { 0%{opacity:0; transform:scale(.96) translateY(8px);} 100%{opacity:1; transform:none;} }
+      @keyframes fadeInUp{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
+      @keyframes popIn{ 0%{opacity:0; transform:scale(.95) translateY(10px);} 100%{opacity:1; transform:none;} }
 
-      /* buttons (function + metric) */
-      .stButton > button { border-radius:10px; font-weight:600; border:1px solid var(--line);
-          padding:.45rem .6rem; transition:transform .12s, box-shadow .12s, background .12s;
-          animation:popIn .35s ease both; }
-      .stButton > button:hover { transform:translateY(-2px);
-          box-shadow:0 6px 16px rgba(31,111,235,.18); }
-      .stButton > button[kind="primary"] {
-          background:linear-gradient(135deg,var(--accent),var(--accent2));
+      .stButton > button{ border-radius:10px; font-weight:600; border:1px solid var(--line);
+          transition:transform .12s, box-shadow .12s, background .12s; animation:popIn .35s ease both; }
+      .stButton > button:hover{ transform:translateY(-2px); box-shadow:0 6px 16px rgba(31,111,235,.18); }
+      .stButton > button[kind="primary"]{ background:linear-gradient(135deg,var(--accent),var(--accent2));
           border:0; color:#fff; box-shadow:0 3px 10px rgba(31,111,235,.28); }
-      .stButton > button[kind="secondary"] { background:#fff; color:#1f2d3d; }
-      /* stagger the buttons within a row for a cascading reveal */
+      .stButton > button[kind="secondary"]{ background:#fff; color:#1f2d3d; }
+      /* cascade metric buttons within a row */
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(1) .stButton>button{animation-delay:.02s}
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2) .stButton>button{animation-delay:.06s}
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(3) .stButton>button{animation-delay:.10s}
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(4) .stButton>button{animation-delay:.14s}
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(5) .stButton>button{animation-delay:.18s}
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(6) .stButton>button{animation-delay:.22s}
+      [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(7) .stButton>button{animation-delay:.26s}
+      [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(8) .stButton>button{animation-delay:.30s}
 
-      /* TABLE: taller (max vertical view); only the table scrolls. */
-      .sheet-wrap { overflow:auto; max-height:calc(100vh - 12rem);
-          border:1px solid var(--line); border-radius:10px;
-          box-shadow:0 1px 4px rgba(16,42,74,.08); animation:fadeInUp .45s ease both; }
-      table.sheet { border-collapse:separate; border-spacing:0; width:auto;
-          min-width:max-content; font-size:var(--fs,0.9rem);
-          font-family:'Inter', system-ui, sans-serif; }
-      table.sheet th, table.sheet td {
-          border:1px solid #d8dee6; padding:7px 12px; text-align:center;
-          vertical-align:middle; white-space:nowrap; overflow-wrap:normal;
-          min-width:var(--cw,6em); }
-      table.sheet thead th { position:sticky; top:0; z-index:2; font-weight:700; }
+      .sheet-wrap{ overflow:auto; max-height:calc(100vh - 11rem); border:1px solid var(--line);
+          border-radius:10px; box-shadow:0 1px 4px rgba(16,42,74,.08); animation:fadeInUp .45s ease both; }
+      table.sheet{ border-collapse:separate; border-spacing:0; width:auto; min-width:max-content;
+          font-size:var(--fs,0.9rem); font-family:'Inter', system-ui, sans-serif; }
+      table.sheet th, table.sheet td{ border:1px solid #d8dee6; padding:7px 12px; text-align:center;
+          vertical-align:middle; white-space:nowrap; overflow-wrap:normal; min-width:var(--cw,6em); }
+      table.sheet thead th{ position:sticky; top:0; z-index:2; font-weight:700; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 
+def stage_css(stage: int) -> None:
+    """Inject sizing for the current stage (1=big functions, 2=metrics, 3=table)."""
+    if stage == 1:
+        css = """
+          [class*="st-key-fn_"] button{ min-height:32vh; font-size:2.3rem; font-weight:800;
+              letter-spacing:2px; border-radius:18px; color:#fff !important; border:0 !important;
+              background:linear-gradient(135deg,var(--accent),var(--accent2)) !important;
+              box-shadow:0 10px 30px rgba(31,111,235,.30); animation:popIn .5s ease both; }
+        """
+    else:
+        css = '[class*="st-key-fn_"] button{ min-height:2.4rem; font-size:.95rem; border-radius:10px; }'
+        if stage == 3:
+            css += (
+                '[class*="st-key-mt_"] button{ min-height:1.9rem; font-size:.78rem; padding:.2rem .4rem; }'
+                '.sheet-wrap{ max-height:calc(100vh - 9rem) !important; }'
+            )
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
 # --------------------------------------------------------------------------- #
-# HTML rendering (faithful: colours + merged cells + frozen panes)
+# Rendering helpers
 # --------------------------------------------------------------------------- #
 def _text_color(hexc: str) -> str:
     if not isinstance(hexc, str) or len(hexc) != 7 or not hexc.startswith("#"):
@@ -133,22 +140,55 @@ def _esc(s) -> str:
 
 
 def _frozen(pos: int, frozen_cols: int, is_header: bool, bg: str, w: float) -> str:
-    """Sticky-left style for column `pos` of a frozen pane (width follows slider)."""
     if pos >= frozen_cols:
         return ""
-    s = (f"position:sticky;left:{round(pos * w, 2)}em;"
-         f"width:{w}em;min-width:{w}em;max-width:{w}em;"
-         f"white-space:normal;overflow-wrap:anywhere;"
-         f"z-index:{4 if is_header else 1};")
+    s = (f"position:sticky;left:{round(pos * w, 2)}em;width:{w}em;min-width:{w}em;max-width:{w}em;"
+         f"white-space:normal;overflow-wrap:anywhere;z-index:{4 if is_header else 1};")
     if not bg:
         s += "background-color:#ffffff;"
     return s
 
 
-def render_table(values, colors, frozen=(1, 1), merges=None,
+def _to_date(s):
+    s = str(s).strip()
+    if not s:
+        return None
+    for fmt in ("%d-%b-%Y", "%d-%B-%Y"):
+        try:
+            return pd.to_datetime(s, format=fmt)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def find_date_cols(header_row, start: int):
+    out = []
+    for c in range(start, len(header_row)):
+        d = _to_date(header_row[c])
+        if d is not None:
+            out.append((c, d))
+    return out
+
+
+def slice_cols(values, colors, merges, keep_cols):
+    """Keep only `keep_cols` (in given order); remap merges that stay contiguous."""
+    colmap = {c: i for i, c in enumerate(keep_cols)}
+    keepset = set(keep_cols)
+    nv = [[(row[c] if c < len(row) else "") for c in keep_cols] for row in values]
+    nc = [[(colors[r][c] if r < len(colors) and c < len(colors[r]) else "")
+           for c in keep_cols] for r in range(len(values))]
+    nm = []
+    for sr, er, sc, ec in (merges or []):
+        cols = list(range(sc, ec))
+        if cols and all(c in keepset for c in cols):
+            nw = [colmap[c] for c in cols]
+            if nw == list(range(min(nw), max(nw) + 1)):
+                nm.append((sr, er, min(nw), max(nw) + 1))
+    return nv, nc, nm
+
+
+def render_table(values, colors, frozen=(0, 0), merges=None,
                  font_rem: float = 0.9, cell_w: float = 6.0, label_w: float = 9.0) -> str:
-    """Render an arbitrary sheet tab faithfully: header row sticky, first
-    `frozen_cols` columns frozen-left, merged ranges, all borders, sheet colours."""
     grid = [list(r) for r in values]
     while grid and not any(str(c).strip() for c in grid[-1]):
         grid.pop()
@@ -165,8 +205,8 @@ def render_table(values, colors, frozen=(1, 1), merges=None,
         return colors[r][c] if (r < len(colors) and c < len(colors[r])) else ""
 
     fr, fc = frozen
-    fc = min(fc, ncols)
-    fr = max(1, fr)
+    fc = max(0, min(fc, ncols))
+    fr = max(0, fr)
 
     anchor, covered = {}, set()
     for sr, er, sc, ec in (merges or []):
@@ -181,7 +221,8 @@ def render_table(values, colors, frozen=(1, 1), merges=None,
                 if (rr, cc) != (sr, sc):
                     covered.add((rr, cc))
 
-    use_thead = not any(r == 0 and rs > 1 for (r, _), (rs, _) in anchor.items())
+    # sticky header only if the sheet freezes >=1 row and no merge crosses row 0
+    use_thead = fr >= 1 and not any(r == 0 and rs > 1 for (r, _), (rs, _) in anchor.items())
 
     def render_row(r: int, tag: str) -> str:
         cells = []
@@ -219,7 +260,7 @@ def render_table(values, colors, frozen=(1, 1), merges=None,
 
 
 # --------------------------------------------------------------------------- #
-# Data access (cached, on-demand per tab)
+# Data access (cached, on-demand)
 # --------------------------------------------------------------------------- #
 def _has_sa() -> bool:
     try:
@@ -228,21 +269,20 @@ def _has_sa() -> bool:
         return False
 
 
-@st.cache_data(ttl=900, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_meta(tick: int = 0) -> list:
     return dl.load_meta(dict(st.secrets["gcp_service_account"]))
 
 
-@st.cache_data(ttl=900, show_spinner="Loading table…")
+@st.cache_data(ttl=300, show_spinner="Loading table…")
 def get_grid(title: str, tick: int = 0):
     return dl.load_tab_grid(dict(st.secrets["gcp_service_account"]), title)
 
 
 # --------------------------------------------------------------------------- #
-# Sidebar — settings
+# Sidebar
 # --------------------------------------------------------------------------- #
 st.sidebar.markdown("##### ⚙️ Controls")
-
 if not _has_sa():
     st.error("No service account configured. Add `gcp_service_account` to "
              "`.streamlit/secrets.toml` (see README).")
@@ -257,13 +297,11 @@ if rf_sec and _HAS_AUTOREFRESH:
 
 st.sidebar.divider()
 font_rem = st.sidebar.slider("🔠 Table font size", 0.6, 1.5, 0.9, 0.05)
-cell_w = st.sidebar.slider("↔️ Data cell width", 2.5, 14.0, 6.0, 0.5,
-                           help="Width of the metric/date data columns.")
-label_w = st.sidebar.slider("🏷️ Label (frozen) width", 3.0, 22.0, 9.0, 0.5,
-                            help="Width of the frozen left (label) columns.")
+cell_w = st.sidebar.slider("↔️ Data cell width", 2.5, 14.0, 6.0, 0.5)
+label_w = st.sidebar.slider("🏷️ Label (frozen) width", 3.0, 22.0, 9.0, 0.5)
 
 # --------------------------------------------------------------------------- #
-# Load tab catalogue
+# Catalogue
 # --------------------------------------------------------------------------- #
 try:
     tabs = get_meta(tick=tick)
@@ -278,33 +316,45 @@ present = [t["function"] for t in tabs if t["function"]]
 functions = [f for f in ("FC", "MH") if f in present] + \
             [f for f in sorted(set(present)) if f not in ("FC", "MH")]
 
-if "func" not in st.session_state or st.session_state.func not in functions:
-    st.session_state.func = functions[0] if functions else None
+st.session_state.setdefault("func", None)          # nothing selected by default
 st.session_state.setdefault("metric", None)
+if st.session_state.func not in functions:
+    st.session_state.func = None
+    st.session_state.metric = None
+
+stage = 1 if st.session_state.func is None else (3 if st.session_state.metric else 2)
+stage_css(stage)
 
 # --------------------------------------------------------------------------- #
-# Banner + Refresh
+# Top: refresh + banner
 # --------------------------------------------------------------------------- #
+top = st.columns([10, 1.5])
+with top[1]:
+    if st.button("🔄 Refresh", key="refresh_btn", use_container_width=True):
+        get_meta.clear()
+        get_grid.clear()
+        st.rerun()
 st.markdown("<div class='app-banner'>BJOC&nbsp;-&nbsp;ALL IN ONE DASHBOARD</div>",
             unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------- #
-# Function buttons (FC / MH)
+# Function buttons (big in stage 1, small after)
 # --------------------------------------------------------------------------- #
-st.markdown("<div class='sec-label'>Function</div>", unsafe_allow_html=True)
-fcols = st.columns(8)
+if stage == 1:
+    fcols = st.columns(len(functions) or 1)
+else:
+    fcols = st.columns([1, 1] + [6])           # two small buttons, rest empty
 for i, f in enumerate(functions):
     if fcols[i].button(f, key=f"fn_{f}", use_container_width=True,
                        type="primary" if st.session_state.func == f else "secondary"):
         st.session_state.func = f
         st.session_state.metric = None
         st.rerun()
-# Refresh sits at the far right of the function row
-if fcols[7].button("🔄", key="refresh_btn", use_container_width=True,
-                   help="Refresh data now"):
-    get_meta.clear()
-    get_grid.clear()
-    st.rerun()
+
+if stage == 1:
+    st.markdown("<div class='hint'>👆 Select a function to begin.</div>",
+                unsafe_allow_html=True)
+    st.stop()
 
 # --------------------------------------------------------------------------- #
 # Metric buttons for the chosen function
@@ -312,30 +362,29 @@ if fcols[7].button("🔄", key="refresh_btn", use_container_width=True,
 metrics = [t for t in tabs if t["function"] == st.session_state.func]
 st.markdown(f"<div class='sec-label'>{st.session_state.func} metrics</div>",
             unsafe_allow_html=True)
-
-PER_ROW = 6
-for start in range(0, len(metrics), PER_ROW):
-    row = metrics[start:start + PER_ROW]
-    cols = st.columns(PER_ROW)
+per_row = 8 if stage == 3 else 6
+for start in range(0, len(metrics), per_row):
+    row = metrics[start:start + per_row]
+    cols = st.columns(per_row)
     for j, t in enumerate(row):
         active = st.session_state.metric == t["title"]
-        if cols[j].button(t["metric"], key=f"m_{t['title']}", use_container_width=True,
+        if cols[j].button(t["metric"], key=f"mt_{t['title']}", use_container_width=True,
                           type="primary" if active else "secondary"):
             st.session_state.metric = t["title"]
             st.rerun()
 
-# --------------------------------------------------------------------------- #
-# Selected metric table
-# --------------------------------------------------------------------------- #
 sel = st.session_state.metric
 if not sel or sel not in {t["title"] for t in metrics}:
-    st.markdown("<div class='hint'>👆 Pick a metric above to view its table.</div>",
+    st.markdown("<div class='hint'>👆 Pick a metric to view its table.</div>",
                 unsafe_allow_html=True)
     st.stop()
 
+# --------------------------------------------------------------------------- #
+# Selected metric table (with Overall / Week / Month for dated tables)
+# --------------------------------------------------------------------------- #
 tab = next(t for t in tabs if t["title"] == sel)
 st.markdown(f"<div class='metric-title'>{_esc(tab['metric'])} "
-            f"<span style='color:#94a3b8;font-weight:600;font-size:.95rem'>· {tab['function']}</span>"
+            f"<span style='color:#94a3b8;font-weight:600;font-size:.9rem'>· {tab['function']}</span>"
             f"<span class='accent'></span></div>", unsafe_allow_html=True)
 
 try:
@@ -344,11 +393,43 @@ except Exception as exc:  # noqa: BLE001
     st.error(f"Could not load **{sel}**.\n\n```\n{exc}\n```")
     st.stop()
 
-st.markdown(
-    render_table(values, colors, frozen=tab["frozen"], merges=tab["merges"],
-                 font_rem=font_rem, cell_w=cell_w, label_w=label_w),
-    unsafe_allow_html=True,
-)
+fr, fc = tab["frozen"]
+merges = tab["merges"]
+header = values[0] if values else []
+date_cols = find_date_cols(header, fc) if fr == 1 else []
+
+
+def show(keep_cols):
+    v, c, m = slice_cols(values, colors, merges, keep_cols)
+    st.markdown(render_table(v, c, frozen=(fr, fc), merges=m,
+                             font_rem=font_rem, cell_w=cell_w, label_w=label_w),
+                unsafe_allow_html=True)
+
+
+if len(date_cols) >= 4:
+    labels = list(range(fc))
+    desc = sorted(date_cols, key=lambda x: x[1], reverse=True)   # latest first
+    t_over, t_week, t_month = st.tabs(["Overall (last 4 days)", "Week", "Month"])
+    with t_over:
+        show(labels + [c for c, _ in desc[:4]])
+    with t_week:
+        weeks = sorted({(int(d.isocalendar().year), int(d.isocalendar().week)) for _, d in date_cols},
+                       reverse=True)
+        wk = st.selectbox("Week", weeks, key="wk_sel",
+                          format_func=lambda k: f"Week {k[1]}, {k[0]}")
+        cols_w = [c for c, d in desc if (int(d.isocalendar().year), int(d.isocalendar().week)) == wk]
+        show(labels + cols_w)
+    with t_month:
+        months = sorted({(d.year, d.month) for _, d in date_cols}, reverse=True)
+        mo = st.selectbox("Month", months, key="mo_sel",
+                          format_func=lambda k: pd.Timestamp(year=k[0], month=k[1], day=1).strftime("%B %Y"))
+        cols_m = [c for c, d in desc if (d.year, d.month) == mo]
+        show(labels + cols_m)
+else:
+    st.markdown(render_table(values, colors, frozen=(fr, fc), merges=merges,
+                             font_rem=font_rem, cell_w=cell_w, label_w=label_w),
+                unsafe_allow_html=True)
+
 if truncated:
     st.caption("⚠️ Large tab — showing the first portion of rows/columns.")
 

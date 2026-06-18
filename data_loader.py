@@ -384,7 +384,8 @@ def load_meta(service_account_info: dict, spreadsheet_id: str = SPREADSHEET_ID,
         tabs.append({
             "title": p["title"], "metric": metric, "function": func,
             "rows": gp.get("rowCount", 0), "cols": gp.get("columnCount", 0),
-            "frozen": (gp.get("frozenRowCount", 1), gp.get("frozenColumnCount", 1)),
+            # honour the sheet's own freeze; default to NONE (don't freeze by default)
+            "frozen": (gp.get("frozenRowCount", 0), gp.get("frozenColumnCount", 0)),
             "merges": [
                 (m.get("startRowIndex", 0), m.get("endRowIndex", 0),
                  m.get("startColumnIndex", 0), m.get("endColumnIndex", 0))
