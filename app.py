@@ -50,11 +50,12 @@ st.markdown(
 
       .block-container,[data-testid="stMainBlockContainer"],[data-testid="stAppViewBlockContainer"]{
           max-width:100% !important; padding:0 1.2rem 0.5rem !important; }
-      header[data-testid="stHeader"]{ height:2.2rem; background:transparent; backdrop-filter:none; }
+      header[data-testid="stHeader"]{ height:1.4rem; background:transparent; backdrop-filter:none; }
+      [data-testid="stDecoration"]{ display:none; }   /* thin rainbow bar at the very top */
       [data-testid="stSidebar"]{ background:#f7f9fc; border-right:1px solid var(--line); }
 
       .app-banner{ text-align:center; font-weight:800; font-size:1.55rem; letter-spacing:1.5px;
-          color:#fff; padding:.6rem 1rem; border-radius:14px; margin:0 0 .5rem;
+          color:#fff; padding:.6rem 1rem; border-radius:14px; margin:-0.3rem 0 .5rem;
           background:linear-gradient(135deg,#232323 0%,#000000 100%);
           box-shadow:0 4px 14px rgba(0,0,0,.32); }
       .sec-label{ font-weight:700; color:#64748b; font-size:.75rem; letter-spacing:.8px;
@@ -105,22 +106,24 @@ st.markdown(
 
 def stage_css(stage: int) -> None:
     """Inject sizing for the current stage (1=big functions, 2=metrics, 3=table)."""
+    # function buttons are circles in every stage; big in stage 1, small after
+    css = '[class*="st-key-fn_"]{ display:flex; justify-content:center; }'
     if stage == 1:
-        css = """
-          [class*="st-key-fn_"] button{ min-height:30vh; font-size:2.3rem; font-weight:800;
-              letter-spacing:2px; border-radius:18px; color:#fff !important;
-              border:1.5px solid var(--accent) !important;
-              background:var(--accent) !important;
+        css += """
+          [class*="st-key-fn_"] button{ width:24vh; height:24vh; border-radius:50%; padding:0;
+              font-size:2rem; font-weight:800; letter-spacing:1px; color:#fff !important;
+              border:1.5px solid var(--accent) !important; background:var(--accent) !important;
               box-shadow:0 10px 30px rgba(31,111,235,.30); animation:popIn .5s ease both; }
           [class*="st-key-fn_"] button:hover{ background:var(--accent2) !important;
               border-color:var(--accent2) !important; color:#fff !important; }
         """
     else:
-        css = '[class*="st-key-fn_"] button{ min-height:2.4rem; font-size:.95rem; border-radius:10px; }'
+        css += '[class*="st-key-fn_"] button{ width:3.6rem; height:3.6rem; border-radius:50%;' \
+               ' padding:0; font-size:.82rem; }'
         if stage == 3:
             css += (
                 '[class*="st-key-mt_"] button{ min-height:1.9rem; font-size:.78rem; padding:.2rem .4rem; }'
-                '.sheet-wrap{ max-height:calc(100vh - 9rem) !important; }'
+                '.sheet-wrap{ max-height:calc(100vh - 8rem) !important; }'
             )
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
@@ -176,6 +179,32 @@ def find_date_cols(header_row, start: int):
         if d is not None:
             out.append((c, d))
     return out
+
+
+def find_date_rows(values, start_row: int, col: int = 0):
+    out = []
+    for r in range(start_row, len(values)):
+        cell = values[r][col] if col < len(values[r]) else ""
+        d = _to_date(cell)
+        if d is not None:
+            out.append((r, d))
+    return out
+
+
+def slice_rows(values, colors, merges, keep_rows):
+    """Keep only `keep_rows` (in given order); remap merges that stay contiguous."""
+    rowmap = {r: i for i, r in enumerate(keep_rows)}
+    keepset = set(keep_rows)
+    nv = [values[r] for r in keep_rows]
+    nc = [(colors[r] if r < len(colors) else []) for r in keep_rows]
+    nm = []
+    for sr, er, sc, ec in (merges or []):
+        rows = list(range(sr, er))
+        if rows and all(rr in keepset for rr in rows):
+            nw = [rowmap[rr] for rr in rows]
+            if nw == list(range(min(nw), max(nw) + 1)):
+                nm.append((min(nw), max(nw) + 1, sc, ec))
+    return nv, nc, nm
 
 
 def slice_cols(values, colors, merges, keep_cols):
@@ -352,7 +381,7 @@ if stage == 1:
 else:
     fcols = st.columns([1, 1] + [6])           # two small buttons, rest empty
 for i, f in enumerate(functions):
-    if fcols[i].button(f, key=f"fn_{f}", use_container_width=True,
+    if fcols[i].button(f, key=f"fn_{f}", use_container_width=False,
                        type="primary" if st.session_state.func == f else "secondary"):
         st.session_state.func = f
         st.session_state.metric = None
@@ -403,35 +432,68 @@ except Exception as exc:  # noqa: BLE001
 fr, fc = tab["frozen"]
 merges = tab["merges"]
 header = values[0] if values else []
+hdr_rows = max(1, fr)
+
+# horizontal dates (in the header row) — the DOD-style layout
 date_cols = find_date_cols(header, fc) if fr == 1 else []
+# vertical dates (in the first column) — only if it's not a header-date table
+date_rows = []
+if len(date_cols) < 4:
+    cand = find_date_rows(values, hdr_rows, 0)
+    if len(cand) >= 4 and cand[0][0] <= hdr_rows + 1:
+        date_rows = cand
 
 
-def show(keep_cols):
+def show_cols(keep_cols):
     v, c, m = slice_cols(values, colors, merges, keep_cols)
     st.markdown(render_table(v, c, frozen=(fr, fc), merges=m,
                              font_rem=font_rem, cell_w=cell_w, label_w=label_w),
                 unsafe_allow_html=True)
 
 
+def show_rows(keep_rows):
+    v, c, m = slice_rows(values, colors, merges, keep_rows)
+    st.markdown(render_table(v, c, frozen=(fr, fc), merges=m,
+                             font_rem=font_rem, cell_w=cell_w, label_w=label_w),
+                unsafe_allow_html=True)
+
+
+def _iso(d):
+    return (int(d.isocalendar().year), int(d.isocalendar().week))
+
+
 if len(date_cols) >= 4:
+    # ---- dates across the header: slice COLUMNS (latest first) ----
     labels = list(range(fc))
-    desc = sorted(date_cols, key=lambda x: x[1], reverse=True)   # latest first
+    desc = sorted(date_cols, key=lambda x: x[1], reverse=True)
     t_over, t_week, t_month = st.tabs(["Overall (last 4 days)", "Week", "Month"])
     with t_over:
-        show(labels + [c for c, _ in desc[:4]])
+        show_cols(labels + [c for c, _ in desc[:4]])
     with t_week:
-        weeks = sorted({(int(d.isocalendar().year), int(d.isocalendar().week)) for _, d in date_cols},
-                       reverse=True)
-        wk = st.selectbox("Week", weeks, key="wk_sel",
-                          format_func=lambda k: f"Week {k[1]}, {k[0]}")
-        cols_w = [c for c, d in desc if (int(d.isocalendar().year), int(d.isocalendar().week)) == wk]
-        show(labels + cols_w)
+        weeks = sorted({_iso(d) for _, d in date_cols}, reverse=True)
+        wk = st.selectbox("Week", weeks, key="wk_sel", format_func=lambda k: f"Week {k[1]}, {k[0]}")
+        show_cols(labels + [c for c, d in desc if _iso(d) == wk])
     with t_month:
         months = sorted({(d.year, d.month) for _, d in date_cols}, reverse=True)
         mo = st.selectbox("Month", months, key="mo_sel",
                           format_func=lambda k: pd.Timestamp(year=k[0], month=k[1], day=1).strftime("%B %Y"))
-        cols_m = [c for c, d in desc if (d.year, d.month) == mo]
-        show(labels + cols_m)
+        show_cols(labels + [c for c, d in desc if (d.year, d.month) == mo])
+elif date_rows:
+    # ---- dates down the first column: slice ROWS (latest first) ----
+    head = list(range(hdr_rows))
+    desc = sorted(date_rows, key=lambda x: x[1], reverse=True)
+    t_over, t_week, t_month = st.tabs(["Overall (last 4 days)", "Week", "Month"])
+    with t_over:
+        show_rows(head + [r for r, _ in desc[:4]])
+    with t_week:
+        weeks = sorted({_iso(d) for _, d in date_rows}, reverse=True)
+        wk = st.selectbox("Week", weeks, key="wk_sel_r", format_func=lambda k: f"Week {k[1]}, {k[0]}")
+        show_rows(head + [r for r, d in desc if _iso(d) == wk])
+    with t_month:
+        months = sorted({(d.year, d.month) for _, d in date_rows}, reverse=True)
+        mo = st.selectbox("Month", months, key="mo_sel_r",
+                          format_func=lambda k: pd.Timestamp(year=k[0], month=k[1], day=1).strftime("%B %Y"))
+        show_rows(head + [r for r, d in desc if (d.year, d.month) == mo])
 else:
     st.markdown(render_table(values, colors, frozen=(fr, fc), merges=merges,
                              font_rem=font_rem, cell_w=cell_w, label_w=label_w),
