@@ -30,7 +30,7 @@ import pandas as pd
 # --------------------------------------------------------------------------- #
 # Config
 # --------------------------------------------------------------------------- #
-SPREADSHEET_ID = "1IPrMDtiERq22V8LLtzV8g21uSZ95DvClJvrqu1biYP4"
+SPREADSHEET_ID = "1OfU6KGYvY-mD1K-F5VC6oILkyvxEDvqTjSnIF7lCKFA"
 SNAPSHOT_PATH = Path(__file__).parent / "data" / "snapshot.csv"
 
 # A row starts a Charter block when its first cell is "Charter" and one of the
@@ -335,6 +335,90 @@ def load_live(
 # --------------------------------------------------------------------------- #
 # Snapshot source (bundled CSV)
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Tab-oriented loaders (BJOC sheet: each tab is a metric tagged "<Metric>-<Func>")
+# --------------------------------------------------------------------------- #
+def _col_a1(n: int) -> str:
+    """1-indexed column number -> spreadsheet letters (1->A, 27->AA)."""
+    s = ""
+    while n > 0:
+        n, r = divmod(n - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+def parse_function(title: str) -> tuple[str, str]:
+    """'Open STN-FC' -> ('Open STN', 'FC'); function = text after the last '-'."""
+    if "-" in title:
+        metric, func = title.rsplit("-", 1)
+        return metric.strip(), func.strip().upper()
+    return title.strip(), ""
+
+
+def _session(service_account_info: dict):
+    from google.oauth2.service_account import Credentials
+    from google.auth.transport.requests import AuthorizedSession
+    creds = Credentials.from_service_account_info(service_account_info, scopes=_SCOPES)
+    return AuthorizedSession(creds)
+
+
+def load_meta(service_account_info: dict, spreadsheet_id: str = SPREADSHEET_ID,
+              include_hidden: bool = False) -> list[dict]:
+    """List visible tabs with parsed function/metric, freeze settings and merges.
+    Cheap: one metadata call, no cell data."""
+    sess = _session(service_account_info)
+    meta = sess.get(
+        f"{_API}/{spreadsheet_id}",
+        params={"fields": "sheets(properties(title,hidden,gridProperties("
+                          "rowCount,columnCount,frozenRowCount,frozenColumnCount)),merges)"},
+    ).json()
+    if "sheets" not in meta:
+        raise ValueError(f"Sheets API error: {meta.get('error', meta)}")
+    tabs = []
+    for s in meta["sheets"]:
+        p = s["properties"]
+        if not include_hidden and p.get("hidden", False):
+            continue
+        gp = p.get("gridProperties", {})
+        metric, func = parse_function(p["title"])
+        tabs.append({
+            "title": p["title"], "metric": metric, "function": func,
+            "rows": gp.get("rowCount", 0), "cols": gp.get("columnCount", 0),
+            "frozen": (gp.get("frozenRowCount", 1), gp.get("frozenColumnCount", 1)),
+            "merges": [
+                (m.get("startRowIndex", 0), m.get("endRowIndex", 0),
+                 m.get("startColumnIndex", 0), m.get("endColumnIndex", 0))
+                for m in s.get("merges", [])
+            ],
+        })
+    return tabs
+
+
+def load_tab_grid(service_account_info: dict, title: str,
+                  spreadsheet_id: str = SPREADSHEET_ID,
+                  max_rows: int = 300, max_cols: int = 200) -> tuple[list, list, bool]:
+    """Fetch one tab's values + cell background colours (bounded window).
+    Returns (values_grid, color_grid, truncated)."""
+    from urllib.parse import quote
+    sess = _session(service_account_info)
+    safe = title.replace("'", "''")
+    rng = quote(f"'{safe}'!A1:{_col_a1(max_cols)}{max_rows}")
+    url = (
+        f"{_API}/{spreadsheet_id}?ranges={rng}&includeGridData=true"
+        "&fields=sheets(data(rowData(values("
+        "formattedValue,effectiveFormat.backgroundColor))))"
+    )
+    data = sess.get(url).json().get("sheets", [{}])[0].get("data", [{}])[0]
+    row_data = data.get("rowData", [])
+    values, colors = [], []
+    for rd in row_data:
+        cells = rd.get("values", [])
+        values.append([c.get("formattedValue", "") for c in cells])
+        colors.append([_bg_hex(c) for c in cells])
+    truncated = len(values) >= max_rows or any(len(r) >= max_cols for r in values)
+    return values, colors, truncated
+
+
 def load_snapshot(path: Path = SNAPSHOT_PATH) -> tuple[pd.DataFrame, dict]:
     """Returns ``(tidy_df, {})`` — the bundled CSV holds no raw aux sheets."""
     if not Path(path).exists():
