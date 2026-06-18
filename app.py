@@ -198,6 +198,19 @@ def find_date_rows(values, start_row: int, col: int = 0):
     return out
 
 
+def drop_blank_cols(values, colors, merges):
+    """Remove columns that are completely empty (no date, no site, no data) — e.g.
+    trailing blanks after the last date. Keeps merges aligned."""
+    if not values:
+        return values, colors, merges
+    ncols = max(len(r) for r in values)
+    keep = [c for c in range(ncols)
+            if any(c < len(r) and str(r[c]).strip() for r in values)]
+    if len(keep) == ncols:
+        return values, colors, merges
+    return slice_cols(values, colors, merges, keep)
+
+
 def slice_rows(values, colors, merges, keep_rows):
     """Keep only `keep_rows` (in given order); remap merges that stay contiguous."""
     rowmap = {r: i for i, r in enumerate(keep_rows)}
@@ -445,6 +458,8 @@ except Exception as exc:  # noqa: BLE001
 
 fr, fc = tab["frozen"]
 merges = tab["merges"]
+# strip fully-blank columns (e.g. empty space after the last date) everywhere
+values, colors, merges = drop_blank_cols(values, colors, merges)
 hdr_rows = max(1, fr)
 
 
