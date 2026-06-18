@@ -160,13 +160,20 @@ def _frozen(pos: int, frozen_cols: int, is_header: bool, bg: str, w: float) -> s
     return s
 
 
+# tried in order; day-first numeric forms before month-first so e.g. 27-03-2026
+# reads as 27-Mar, while 04-13-2026 (invalid as day-first) falls through to month-first.
+_DATE_FMTS = ("%d-%b-%Y", "%d-%B-%Y", "%d-%m-%Y", "%m-%d-%Y", "%Y-%m-%d",
+              "%d/%m/%Y", "%m/%d/%Y", "%d-%b-%y", "%d %b %Y", "%d %B %Y")
+
+
 def _to_date(s):
     s = str(s).strip()
-    if not s:
+    if not s or len(s) < 6:
         return None
-    for fmt in ("%d-%b-%Y", "%d-%B-%Y"):
+    for fmt in _DATE_FMTS:
         try:
-            return pd.to_datetime(s, format=fmt)
+            d = pd.to_datetime(s, format=fmt)
+            return None if pd.isna(d) else d
         except (ValueError, TypeError):
             continue
     return None
@@ -312,8 +319,15 @@ def get_meta(tick: int = 0) -> list:
 
 
 @st.cache_data(ttl=300, show_spinner="Loading table…")
-def get_grid(title: str, tick: int = 0):
-    return dl.load_tab_grid(dict(st.secrets["gcp_service_account"]), title)
+def get_grid(title: str, ncols: int = 60, nrows: int = 60, tick: int = 0):
+    # fetch wide enough to reach the latest dates (rightmost cols), bounded by a
+    # total-cell budget so high-row tabs don't blow up the payload
+    mc = min(max(int(ncols), 60), 600)
+    mr = min(max(int(nrows), 40), 400)
+    if mr * mc > 150_000:
+        mc = max(60, 150_000 // mr)
+    return dl.load_tab_grid(dict(st.secrets["gcp_service_account"]), title,
+                            max_rows=mr, max_cols=mc)
 
 
 # --------------------------------------------------------------------------- #
@@ -424,29 +438,54 @@ st.markdown(f"<div class='metric-title'>{_esc(tab['metric'])} "
             f"<span class='accent'></span></div>", unsafe_allow_html=True)
 
 try:
-    values, colors, truncated = get_grid(sel, tick=tick)
+    values, colors, truncated = get_grid(sel, ncols=tab["cols"], nrows=tab["rows"], tick=tick)
 except Exception as exc:  # noqa: BLE001
     st.error(f"Could not load **{sel}**.\n\n```\n{exc}\n```")
     st.stop()
 
 fr, fc = tab["frozen"]
 merges = tab["merges"]
-header = values[0] if values else []
 hdr_rows = max(1, fr)
 
-# horizontal dates (in the header row) — the DOD-style layout
-date_cols = find_date_cols(header, fc) if fr == 1 else []
-# vertical dates (in the first column) — only if it's not a header-date table
+
+def _iso(d):
+    return (int(d.isocalendar().year), int(d.isocalendar().week))
+
+
+def detect_date_header(grid, max_search=6):
+    """Find the row that holds the dates (search the first few rows). Returns
+    (row_index, [(col, date), ...] sorted by col). Handles multi-row headers."""
+    best_row, best = None, []
+    for r in range(min(max_search, len(grid))):
+        starts = [(c, _to_date(grid[r][c])) for c in range(len(grid[r])) if _to_date(grid[r][c])]
+        if len(starts) > len(best):
+            best, best_row = starts, r
+    return best_row, sorted(best, key=lambda x: x[0])
+
+
+def date_groups_from(date_starts, ncols_full):
+    """Each date owns the columns from its start up to the next date's start
+    (so a date that visually spans several sub-columns keeps them all)."""
+    gmap = {}
+    for i, (c, d) in enumerate(date_starts):
+        end = date_starts[i + 1][0] if i + 1 < len(date_starts) else ncols_full
+        gmap.setdefault(d, []).extend(range(c, end))
+    return gmap
+
+
+# horizontal dates (a header row anywhere in the first rows) — generic
+dr_row, date_starts = detect_date_header(values)
+# vertical dates (down the first column) — only if not a header-date table
 date_rows = []
-if len(date_cols) < 4:
+if len(date_starts) < 4:
     cand = find_date_rows(values, hdr_rows, 0)
     if len(cand) >= 4 and cand[0][0] <= hdr_rows + 1:
         date_rows = cand
 
 
-def show_cols(keep_cols):
+def show_cols(keep_cols, frozen):
     v, c, m = slice_cols(values, colors, merges, keep_cols)
-    st.markdown(render_table(v, c, frozen=(fr, fc), merges=m,
+    st.markdown(render_table(v, c, frozen=frozen, merges=m,
                              font_rem=font_rem, cell_w=cell_w, label_w=label_w),
                 unsafe_allow_html=True)
 
@@ -458,26 +497,29 @@ def show_rows(keep_rows):
                 unsafe_allow_html=True)
 
 
-def _iso(d):
-    return (int(d.isocalendar().year), int(d.isocalendar().week))
-
-
-if len(date_cols) >= 4:
-    # ---- dates across the header: slice COLUMNS (latest first) ----
-    labels = list(range(fc))
-    desc = sorted(date_cols, key=lambda x: x[1], reverse=True)
+if len(date_starts) >= 4:
+    # ---- dates across a header row: slice COLUMNS by date group (latest first) ----
+    ncols_full = max(len(r) for r in values)
+    first_date_col = date_starts[0][0]
+    labels = list(range(first_date_col))            # everything before the first date
+    gmap = date_groups_from(date_starts, ncols_full)
+    dates_desc = sorted(gmap.keys(), reverse=True)
+    frz = (fr, first_date_col)                       # freeze header rows + label cols
     t_over, t_week, t_month = st.tabs(["Overall (last 4 days)", "Week", "Month"])
     with t_over:
-        show_cols(labels + [c for c, _ in desc[:4]])
+        cols = labels + [c for d in dates_desc[:4] for c in gmap[d]]
+        show_cols(cols, frz)
     with t_week:
-        weeks = sorted({_iso(d) for _, d in date_cols}, reverse=True)
+        weeks = sorted({_iso(d) for d in gmap}, reverse=True)
         wk = st.selectbox("Week", weeks, key="wk_sel", format_func=lambda k: f"Week {k[1]}, {k[0]}")
-        show_cols(labels + [c for c, d in desc if _iso(d) == wk])
+        cols = labels + [c for d in dates_desc if _iso(d) == wk for c in gmap[d]]
+        show_cols(cols, frz)
     with t_month:
-        months = sorted({(d.year, d.month) for _, d in date_cols}, reverse=True)
+        months = sorted({(d.year, d.month) for d in gmap}, reverse=True)
         mo = st.selectbox("Month", months, key="mo_sel",
                           format_func=lambda k: pd.Timestamp(year=k[0], month=k[1], day=1).strftime("%B %Y"))
-        show_cols(labels + [c for c, d in desc if (d.year, d.month) == mo])
+        cols = labels + [c for d in dates_desc if (d.year, d.month) == mo for c in gmap[d]]
+        show_cols(cols, frz)
 elif date_rows:
     # ---- dates down the first column: slice ROWS (latest first) ----
     head = list(range(hdr_rows))
