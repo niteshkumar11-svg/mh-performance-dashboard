@@ -160,23 +160,10 @@ def _frozen(pos: int, frozen_cols: int, is_header: bool, bg: str, w: float) -> s
     return s
 
 
-# tried in order; day-first numeric forms before month-first so e.g. 27-03-2026
-# reads as 27-Mar, while 04-13-2026 (invalid as day-first) falls through to month-first.
-_DATE_FMTS = ("%d-%b-%Y", "%d-%B-%Y", "%d-%m-%Y", "%m-%d-%Y", "%Y-%m-%d",
-              "%d/%m/%Y", "%m/%d/%Y", "%d-%b-%y", "%d %b %Y", "%d %B %Y")
-
-
-def _to_date(s):
-    s = str(s).strip()
-    if not s or len(s) < 6:
-        return None
-    for fmt in _DATE_FMTS:
-        try:
-            d = pd.to_datetime(s, format=fmt)
-            return None if pd.isna(d) else d
-        except (ValueError, TypeError):
-            continue
-    return None
+# Date parsing & per-metric format disambiguation live in data_loader so the
+# same logic is shared by the app and the regression tool (no drift).
+_to_date = dl.to_date
+_choose_parser = dl.choose_parser
 
 
 def find_date_cols(header_row, start: int):
@@ -488,14 +475,24 @@ def date_groups_from(date_starts, ncols_full):
     return gmap
 
 
-# horizontal dates (a header row anywhere in the first rows) — generic
+# horizontal dates (a header row anywhere in the first rows) — generic.
+# `detect_date_header` locates date-like cells permissively; we then lock the
+# correct format for THIS metric and re-parse (fixes DD-MM vs MM-DD sheets).
 dr_row, date_starts = detect_date_header(values)
+if dr_row is not None and len(date_starts) >= 4:
+    cols = [c for c, _ in date_starts]
+    parser = _choose_parser([values[dr_row][c] for c in cols])
+    date_starts = [(c, parser(values[dr_row][c])) for c in cols
+                   if parser(values[dr_row][c]) is not None]
+
 # vertical dates (down the first column) — only if not a header-date table
 date_rows = []
 if len(date_starts) < 4:
-    cand = find_date_rows(values, hdr_rows, 0)
-    if len(cand) >= 4 and cand[0][0] <= hdr_rows + 1:
-        date_rows = cand
+    rows0 = [(r, values[r][0]) for r in range(hdr_rows, len(values))
+             if values[r] and _to_date(values[r][0]) is not None]
+    if len(rows0) >= 4 and rows0[0][0] <= hdr_rows + 1:
+        parser = _choose_parser([s for _, s in rows0])
+        date_rows = [(r, parser(s)) for r, s in rows0 if parser(s) is not None]
 
 
 def show_cols(keep_cols, frozen):

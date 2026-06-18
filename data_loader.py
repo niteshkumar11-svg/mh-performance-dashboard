@@ -338,6 +338,69 @@ def load_live(
 # --------------------------------------------------------------------------- #
 # Tab-oriented loaders (BJOC sheet: each tab is a metric tagged "<Metric>-<Func>")
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Date parsing & per-metric format disambiguation (shared by app + tests)
+# --------------------------------------------------------------------------- #
+# Named-month forms are unambiguous; numeric forms (DD-MM vs MM-DD) are not, so
+# the format is chosen per metric from the actual values (see choose_parser).
+DATE_FMTS = ("%d-%b-%Y", "%d-%B-%Y", "%Y-%m-%d", "%m-%d-%Y", "%d-%m-%Y",
+             "%m/%d/%Y", "%d/%m/%Y", "%d-%b-%y", "%d %b %Y", "%d %B %Y")
+
+
+def try_fmt(s, fmt):
+    try:
+        d = pd.to_datetime(str(s).strip(), format=fmt)
+        return None if pd.isna(d) else d
+    except (ValueError, TypeError):
+        return None
+
+
+def to_date(s):
+    """Permissive parse — matches under ANY known format. Used to LOCATE
+    date-like cells; final values are re-parsed with the chosen format."""
+    s = str(s).strip()
+    if not s or len(s) < 6:
+        return None
+    for fmt in DATE_FMTS:
+        d = try_fmt(s, fmt)
+        if d is not None:
+            return d
+    return None
+
+
+def best_fmt(strings):
+    """Pick the format that best fits a set of date strings: parse the most
+    cells, then (tie-break) the most chronological (non-decreasing) sequence."""
+    best, best_score = None, (-1, -1.0)
+    for fmt in DATE_FMTS:
+        seq = [d for d in (try_fmt(s, fmt) for s in strings) if d is not None]
+        if not seq:
+            continue
+        mono = (sum(1 for a, b in zip(seq, seq[1:]) if b >= a) / (len(seq) - 1)
+                if len(seq) > 1 else 1.0)
+        score = (len(seq), mono)
+        if score > best_score:
+            best_score, best = score, fmt
+    return best
+
+
+def choose_parser(strings):
+    """Return a parser locked to the best format for these values, with a
+    permissive fallback for the odd cell in another format (e.g. a lone
+    named-month date in an otherwise MM-DD column)."""
+    fmt = best_fmt([s for s in strings if str(s).strip()])
+    if not fmt:
+        return to_date
+
+    def parse(s):
+        s2 = str(s).strip()
+        if not s2 or len(s2) < 6:
+            return None
+        d = try_fmt(s2, fmt)
+        return d if d is not None else to_date(s2)
+    return parse
+
+
 def _col_a1(n: int) -> str:
     """1-indexed column number -> spreadsheet letters (1->A, 27->AA)."""
     s = ""
