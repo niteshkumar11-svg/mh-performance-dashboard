@@ -49,14 +49,14 @@ st.markdown(
       html, body, [data-testid="stAppViewContainer"] { font-family:'Inter', system-ui, sans-serif; }
 
       .block-container,[data-testid="stMainBlockContainer"],[data-testid="stAppViewBlockContainer"]{
-          max-width:100% !important; padding:0.3rem 1.2rem 0.5rem !important; }
+          max-width:100% !important; padding:0 1.2rem 0.5rem !important; }
       header[data-testid="stHeader"]{ height:2.2rem; background:transparent; backdrop-filter:none; }
       [data-testid="stSidebar"]{ background:#f7f9fc; border-right:1px solid var(--line); }
 
       .app-banner{ text-align:center; font-weight:800; font-size:1.55rem; letter-spacing:1.5px;
-          color:#fff; padding:.6rem 1rem; border-radius:14px; margin:.1rem 0 .5rem;
-          background:linear-gradient(135deg,#1f6feb 0%,#4f46e5 55%,#7c3aed 100%);
-          box-shadow:0 4px 14px rgba(31,111,235,.28); }
+          color:#fff; padding:.6rem 1rem; border-radius:14px; margin:0 0 .5rem;
+          background:linear-gradient(135deg,#232323 0%,#000000 100%);
+          box-shadow:0 4px 14px rgba(0,0,0,.32); }
       .sec-label{ font-weight:700; color:#64748b; font-size:.75rem; letter-spacing:.8px;
           text-transform:uppercase; margin:.35rem 0 .15rem; }
       .metric-title{ text-align:center; font-weight:800; font-size:1.15rem; color:var(--ink);
@@ -69,11 +69,16 @@ st.markdown(
       @keyframes fadeInUp{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
       @keyframes popIn{ 0%{opacity:0; transform:scale(.95) translateY(10px);} 100%{opacity:1; transform:none;} }
 
-      .stButton > button{ border-radius:10px; font-weight:600; border:1px solid var(--line);
-          transition:transform .12s, box-shadow .12s, background .12s; animation:popIn .35s ease both; }
-      .stButton > button:hover{ transform:translateY(-2px); box-shadow:0 6px 16px rgba(31,111,235,.18); }
-      .stButton > button[kind="primary"]{ background:linear-gradient(135deg,var(--accent),var(--accent2));
-          border:0; color:#fff; box-shadow:0 3px 10px rgba(31,111,235,.28); }
+      /* pill buttons: white default, solid-blue when selected, blue-outline on hover */
+      .stButton > button{ border-radius:11px; font-weight:600; border:1.5px solid #cbd5e1;
+          background:#fff; color:#1f2d3d; box-shadow:0 1px 3px rgba(16,42,74,.10);
+          transition:all .15s ease; animation:popIn .35s ease both; }
+      .stButton > button:hover{ border-color:var(--accent); color:var(--accent);
+          background:#fff; transform:translateY(-2px); box-shadow:0 6px 16px rgba(31,111,235,.20); }
+      .stButton > button[kind="primary"]{ background:var(--accent); border:1.5px solid var(--accent);
+          color:#fff; box-shadow:0 4px 12px rgba(31,111,235,.32); }
+      .stButton > button[kind="primary"]:hover{ background:var(--accent2);
+          border-color:var(--accent2); color:#fff; }
       .stButton > button[kind="secondary"]{ background:#fff; color:#1f2d3d; }
       /* cascade metric buttons within a row */
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(1) .stButton>button{animation-delay:.02s}
@@ -102,10 +107,13 @@ def stage_css(stage: int) -> None:
     """Inject sizing for the current stage (1=big functions, 2=metrics, 3=table)."""
     if stage == 1:
         css = """
-          [class*="st-key-fn_"] button{ min-height:32vh; font-size:2.3rem; font-weight:800;
-              letter-spacing:2px; border-radius:18px; color:#fff !important; border:0 !important;
-              background:linear-gradient(135deg,var(--accent),var(--accent2)) !important;
+          [class*="st-key-fn_"] button{ min-height:30vh; font-size:2.3rem; font-weight:800;
+              letter-spacing:2px; border-radius:18px; color:#fff !important;
+              border:1.5px solid var(--accent) !important;
+              background:var(--accent) !important;
               box-shadow:0 10px 30px rgba(31,111,235,.30); animation:popIn .5s ease both; }
+          [class*="st-key-fn_"] button:hover{ background:var(--accent2) !important;
+              border-color:var(--accent2) !important; color:#fff !important; }
         """
     else:
         css = '[class*="st-key-fn_"] button{ min-height:2.4rem; font-size:.95rem; border-radius:10px; }'
@@ -288,6 +296,11 @@ if not _has_sa():
              "`.streamlit/secrets.toml` (see README).")
     st.stop()
 
+if st.sidebar.button("🔄 Refresh now", key="refresh_btn", use_container_width=True):
+    get_meta.clear()
+    get_grid.clear()
+    st.rerun()
+
 _RF = {"Off": 0, "30 sec": 30, "1 min": 60, "5 min": 300}
 rf_choice = st.sidebar.selectbox("⏱️ Auto-refresh", list(_RF), index=2)
 rf_sec = _RF[rf_choice]
@@ -326,14 +339,8 @@ stage = 1 if st.session_state.func is None else (3 if st.session_state.metric el
 stage_css(stage)
 
 # --------------------------------------------------------------------------- #
-# Top: refresh + banner
+# Banner
 # --------------------------------------------------------------------------- #
-top = st.columns([10, 1.5])
-with top[1]:
-    if st.button("🔄 Refresh", key="refresh_btn", use_container_width=True):
-        get_meta.clear()
-        get_grid.clear()
-        st.rerun()
 st.markdown("<div class='app-banner'>BJOC&nbsp;-&nbsp;ALL IN ONE DASHBOARD</div>",
             unsafe_allow_html=True)
 
