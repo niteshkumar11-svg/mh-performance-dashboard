@@ -341,10 +341,18 @@ def load_live(
 # --------------------------------------------------------------------------- #
 # Date parsing & per-metric format disambiguation (shared by app + tests)
 # --------------------------------------------------------------------------- #
-# Named-month forms are unambiguous; numeric forms (DD-MM vs MM-DD) are not, so
-# the format is chosen per metric from the actual values (see choose_parser).
-DATE_FMTS = ("%d-%b-%Y", "%d-%B-%Y", "%Y-%m-%d", "%m-%d-%Y", "%d-%m-%Y",
-             "%m/%d/%Y", "%d/%m/%Y", "%d-%b-%y", "%d %b %Y", "%d %B %Y")
+# Numeric dates are ambiguous (DD-MM vs MM-DD). We pick a day-first / month-first
+# ORDER per metric (separator-agnostic) from the actual values, rather than a
+# fixed global order. Groups are tried for ties in this PRIORITY: unambiguous
+# named & ISO first, then day-first (DD-MM, the India/Flipkart default) before
+# month-first (MM-DD) — so a genuinely ambiguous all-(<=12) column reads DD-MM,
+# while month data containing any day>12 still forces MM-DD via the count score.
+_NAMED = ("%d-%b-%Y", "%d-%B-%Y", "%d %b %Y", "%d %B %Y", "%d-%b-%y")
+_YMD = ("%Y-%m-%d", "%Y/%m/%d")
+_DMY = ("%d-%m-%Y", "%d/%m/%Y")           # day-first (India default on ties)
+_MDY = ("%m-%d-%Y", "%m/%d/%Y")           # month-first (US)
+_ORDER_GROUPS = (("named", _NAMED), ("ymd", _YMD), ("dmy", _DMY), ("mdy", _MDY))
+DATE_FMTS = _NAMED + _YMD + _DMY + _MDY    # permissive order (day-first before month-first)
 
 
 def try_fmt(s, fmt):
@@ -355,9 +363,18 @@ def try_fmt(s, fmt):
         return None
 
 
+def _parse_group(s, fmts):
+    for fmt in fmts:
+        d = try_fmt(s, fmt)
+        if d is not None:
+            return d
+    return None
+
+
 def to_date(s):
-    """Permissive parse — matches under ANY known format. Used to LOCATE
-    date-like cells; final values are re-parsed with the chosen format."""
+    """Permissive parse — matches under ANY known format (day-first preferred).
+    Used to LOCATE date-like cells; final values are re-parsed with the chosen
+    per-metric order."""
     s = str(s).strip()
     if not s or len(s) < 6:
         return None
@@ -368,35 +385,48 @@ def to_date(s):
     return None
 
 
+def _score_group(strings, fmts):
+    """(#cells parsed, best monotonic fraction in EITHER direction). Real tabs
+    can be laid out oldest- or newest-first, so monotonicity is bidirectional."""
+    seq = [d for d in (_parse_group(s, fmts) for s in strings) if d is not None]
+    if not seq:
+        return (0, 0.0)
+    if len(seq) == 1:
+        return (1, 1.0)
+    asc = sum(1 for a, b in zip(seq, seq[1:]) if b >= a)
+    desc = sum(1 for a, b in zip(seq, seq[1:]) if b <= a)
+    return (len(seq), max(asc, desc) / (len(seq) - 1))
+
+
 def best_fmt(strings):
-    """Pick the format that best fits a set of date strings: parse the most
-    cells, then (tie-break) the most chronological (non-decreasing) sequence."""
+    """Diagnostic: the primary format of the best-fitting order group."""
+    grp = _best_group(strings)
+    return grp[0] if grp else None
+
+
+def _best_group(strings):
+    strings = [s for s in strings if str(s).strip()]
     best, best_score = None, (-1, -1.0)
-    for fmt in DATE_FMTS:
-        seq = [d for d in (try_fmt(s, fmt) for s in strings) if d is not None]
-        if not seq:
-            continue
-        mono = (sum(1 for a, b in zip(seq, seq[1:]) if b >= a) / (len(seq) - 1)
-                if len(seq) > 1 else 1.0)
-        score = (len(seq), mono)
+    for _name, fmts in _ORDER_GROUPS:          # priority order; '>' keeps earlier on tie
+        score = _score_group(strings, fmts)
         if score > best_score:
-            best_score, best = score, fmt
-    return best
+            best_score, best = score, fmts
+    return best if best_score[0] > 0 else None
 
 
 def choose_parser(strings):
-    """Return a parser locked to the best format for these values, with a
-    permissive fallback for the odd cell in another format (e.g. a lone
-    named-month date in an otherwise MM-DD column)."""
-    fmt = best_fmt([s for s in strings if str(s).strip()])
-    if not fmt:
+    """Return a parser locked to the best day/month ORDER for these values
+    (separator-agnostic), with a permissive fallback for stray cells in another
+    format (e.g. a lone named-month date in an otherwise MM-DD column)."""
+    grp = _best_group(strings)
+    if not grp:
         return to_date
 
     def parse(s):
         s2 = str(s).strip()
         if not s2 or len(s2) < 6:
             return None
-        d = try_fmt(s2, fmt)
+        d = _parse_group(s2, grp)
         return d if d is not None else to_date(s2)
     return parse
 
