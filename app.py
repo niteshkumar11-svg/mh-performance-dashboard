@@ -53,19 +53,21 @@ let s = doc.getElementById('laser-style');
 if(!s){ s = doc.createElement('style'); s.id='laser-style'; doc.head.appendChild(s); }
 s.textContent = `
   body.laser-on table.sheet td, body.laser-on table.sheet th { cursor: ${CUR} !important; }
+  body.laser-on table.sheet { user-select:none; -webkit-user-select:none; }
   body.laser-on table.sheet td:hover, body.laser-on table.sheet th:hover {
       outline: 3px solid #ff2d2d; outline-offset:-3px; }
   table.sheet td.laser-cur, table.sheet th.laser-cur {
-      box-shadow: inset 0 0 0 9999px rgba(255,45,45,.20); }
+      box-shadow: inset 0 0 0 9999px rgba(255,45,45,.22); }
   table.sheet td.laser-keep, table.sheet th.laser-keep {
-      box-shadow: inset 0 0 0 9999px rgba(255,45,45,.20), inset 0 0 0 2px #ff2d2d; }
+      box-shadow: inset 0 0 0 9999px rgba(255,45,45,.22), inset 0 0 0 2px #ff2d2d; }
 `;
 // Delegated handlers on the document, replaced each run so they never go stale
-// when Streamlit recreates this component iframe.
+// when Streamlit recreates this component iframe. Press-drag-release rubber band.
 if(doc.__laser){
-  doc.removeEventListener('dblclick', doc.__laser.db, true);
+  doc.removeEventListener('mousedown', doc.__laser.md, true);
   doc.removeEventListener('mousemove', doc.__laser.mm, true);
-  doc.removeEventListener('click', doc.__laser.ck, true);
+  doc.removeEventListener('mouseup',   doc.__laser.mu, true);
+  doc.removeEventListener('dblclick',  doc.__laser.db, true);
 }
 let sel=false, ax=0, ay=0, tbl=null;
 const on = ()=> doc.body.classList.contains('laser-on');
@@ -76,16 +78,20 @@ function mark(x0,y0,x1,y1){
     c.classList.toggle('laser-cur', r.left<R && r.right>L && r.top<B && r.bottom>T);
   });
 }
-const db = e=>{ if(!on()) return; const td=e.target.closest('td,th');
+const md = e=>{ if(!on() || e.button!==0) return; const td=e.target.closest('td,th');
   const t=td&&td.closest('table.sheet'); if(!t) return;
   sel=true; tbl=t; ax=e.clientX; ay=e.clientY; mark(ax,ay,ax,ay); e.preventDefault(); };
-const mm = e=>{ if(on() && sel && tbl) mark(ax,ay,e.clientX,e.clientY); };
-const ck = e=>{ if(on() && sel && tbl){ sel=false;
+const mm = e=>{ if(on() && sel && tbl){ mark(ax,ay,e.clientX,e.clientY); e.preventDefault(); } };
+const mu = e=>{ if(on() && sel && tbl){ sel=false;
   tbl.querySelectorAll('.laser-cur').forEach(c=>{ c.classList.remove('laser-cur'); c.classList.add('laser-keep'); }); } };
-doc.addEventListener('dblclick', db, true);
+const db = e=>{ if(!on()) return;      // double-click clears all highlights
+  doc.querySelectorAll('.laser-cur,.laser-keep').forEach(c=>c.classList.remove('laser-cur','laser-keep'));
+  e.preventDefault(); };
+doc.addEventListener('mousedown', md, true);
 doc.addEventListener('mousemove', mm, true);
-doc.addEventListener('click', ck, true);
-doc.__laser = {db, mm, ck};
+doc.addEventListener('mouseup',   mu, true);
+doc.addEventListener('dblclick',  db, true);
+doc.__laser = {md, mm, mu, db};
 if(ENABLED){ doc.body.classList.add('laser-on'); }
 else { doc.body.classList.remove('laser-on');
        doc.querySelectorAll('.laser-cur,.laser-keep').forEach(c=>c.classList.remove('laser-cur','laser-keep')); }
@@ -161,7 +167,9 @@ st.markdown(
 
       .sheet-wrap{ overflow:auto; max-height:calc(100vh - 11rem); border:1.5px solid #000;
           border-radius:8px; box-shadow:0 1px 4px rgba(16,42,74,.08); animation:fadeInUp .45s ease both; }
-      table.sheet{ border-collapse:separate; border-spacing:0; width:auto; min-width:max-content;
+      /* width:100% so few-column tables stretch to fill the box; min-width:max-content
+         keeps wide tables their natural width (horizontal scroll) */
+      table.sheet{ border-collapse:separate; border-spacing:0; width:100%; min-width:max-content;
           font-size:var(--fs,0.9rem); font-family:'Inter', system-ui, sans-serif; }
       /* black "all borders" on every cell of every table */
       table.sheet th, table.sheet td{ border:1px solid #000; padding:7px 12px; text-align:center;
@@ -520,8 +528,9 @@ with ttl_col:
                 f"<span class='accent'></span></div>", unsafe_allow_html=True)
 with hl_col:
     hl_on = st.toggle("🔦 Highlighter", value=False, key="hl_on",
-                      help="Hover to laser-point a cell. Double-click then move the "
-                           "cursor to highlight a region; click to lock it. Toggle off to clear.")
+                      help="Hover to laser-point a cell. Click-and-drag to highlight a "
+                           "region (it locks on release; drag again to add more). "
+                           "Double-click clears all; toggle off to exit.")
 
 try:
     values, colors, truncated = get_grid(sel, ncols=tab["cols"], nrows=tab["rows"], tick=tick)
