@@ -347,7 +347,10 @@ def load_live(
 # named & ISO first, then day-first (DD-MM, the India/Flipkart default) before
 # month-first (MM-DD) — so a genuinely ambiguous all-(<=12) column reads DD-MM,
 # while month data containing any day>12 still forces MM-DD via the count score.
-_NAMED = ("%d-%b-%Y", "%d-%B-%Y", "%d %b %Y", "%d %B %Y", "%d-%b-%y")
+# Named-month forms (incl. YEAR-LESS like "21-May" / "08-Feb") are unambiguous on
+# day vs month. Year-less dates get the current year assigned (see try_fmt).
+_NAMED = ("%d-%b-%Y", "%d-%B-%Y", "%d %b %Y", "%d %B %Y", "%d-%b-%y",
+          "%d-%b", "%d-%B", "%d %b", "%d %B", "%b-%d", "%b %d")
 _YMD = ("%Y-%m-%d", "%Y/%m/%d")
 _DMY = ("%d-%m-%Y", "%d/%m/%Y")           # day-first (India default on ties)
 _MDY = ("%m-%d-%Y", "%m/%d/%Y")           # month-first (US)
@@ -355,10 +358,23 @@ _ORDER_GROUPS = (("named", _NAMED), ("ymd", _YMD), ("dmy", _DMY), ("mdy", _MDY))
 DATE_FMTS = _NAMED + _YMD + _DMY + _MDY    # permissive order (day-first before month-first)
 
 
+def _default_year():
+    from datetime import date
+    return date.today().year
+
+
 def try_fmt(s, fmt):
     try:
         d = pd.to_datetime(str(s).strip(), format=fmt)
-        return None if pd.isna(d) else d
+        if pd.isna(d):
+            return None
+        # year-less formats parse to year 1900 — assign the current year
+        if "%Y" not in fmt and "%y" not in fmt:
+            try:
+                d = d.replace(year=_default_year())
+            except ValueError:        # e.g. 29-Feb in a non-leap year
+                return None
+        return d
     except (ValueError, TypeError):
         return None
 
@@ -376,7 +392,7 @@ def to_date(s):
     Used to LOCATE date-like cells; final values are re-parsed with the chosen
     per-metric order."""
     s = str(s).strip()
-    if not s or len(s) < 6:
+    if not s or len(s) < 5:        # allows year-less single-digit day, e.g. "8-Feb"
         return None
     for fmt in DATE_FMTS:
         d = try_fmt(s, fmt)
