@@ -91,11 +91,12 @@ st.markdown(
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(7) .stButton>button{animation-delay:.26s}
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(8) .stButton>button{animation-delay:.30s}
 
-      .sheet-wrap{ overflow:auto; max-height:calc(100vh - 11rem); border:1px solid var(--line);
-          border-radius:10px; box-shadow:0 1px 4px rgba(16,42,74,.08); animation:fadeInUp .45s ease both; }
+      .sheet-wrap{ overflow:auto; max-height:calc(100vh - 11rem); border:1.5px solid #000;
+          border-radius:8px; box-shadow:0 1px 4px rgba(16,42,74,.08); animation:fadeInUp .45s ease both; }
       table.sheet{ border-collapse:separate; border-spacing:0; width:auto; min-width:max-content;
           font-size:var(--fs,0.9rem); font-family:'Inter', system-ui, sans-serif; }
-      table.sheet th, table.sheet td{ border:1px solid #d8dee6; padding:7px 12px; text-align:center;
+      /* black "all borders" on every cell of every table */
+      table.sheet th, table.sheet td{ border:1px solid #000; padding:7px 12px; text-align:center;
           vertical-align:middle; white-space:nowrap; overflow-wrap:normal; min-width:var(--cw,6em); }
       table.sheet thead th{ position:sticky; top:0; z-index:2; font-weight:700; }
     </style>
