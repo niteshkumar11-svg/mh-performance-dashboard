@@ -107,8 +107,10 @@ st.markdown(
 
 def stage_css(stage: int) -> None:
     """Inject sizing for the current stage (1=big functions, 2=metrics, 3=table)."""
-    # function buttons are circles in every stage; big in stage 1, small after
-    css = '[class*="st-key-fn_"]{ display:flex; justify-content:center; }'
+    # function buttons are circles in every stage; big in stage 1, small after.
+    # Center the circle within its (full-width) column so columns space evenly.
+    css = ('[class*="st-key-fn_"]{ display:flex; justify-content:center; }'
+           '[class*="st-key-fn_"] .stButton{ display:flex; justify-content:center; width:100%; }')
     if stage == 1:
         css += """
           [class*="st-key-fn_"] button{ width:24vh; height:24vh; border-radius:50%; padding:0;
@@ -391,13 +393,14 @@ st.markdown("<div class='app-banner'>BJOC&nbsp;-&nbsp;ALL IN ONE DASHBOARD</div>
 # --------------------------------------------------------------------------- #
 # Function buttons (big in stage 1, small after)
 # --------------------------------------------------------------------------- #
-if stage == 1:
-    fcols = st.columns(len(functions) or 1)
-else:
-    fcols = st.columns([1, 1] + [6])           # two small buttons, rest empty
+# breathing room below the banner: large at the start, small once a function is picked
+st.markdown(f"<div style='height:{'4.5rem' if stage == 1 else '0.4rem'}'></div>",
+            unsafe_allow_html=True)
+# centered, uniformly-spaced function circles (one spacer column on each side)
+fcols = st.columns([1] + [1] * len(functions) + [1])
 for i, f in enumerate(functions):
-    if fcols[i].button(f, key=f"fn_{f}", use_container_width=False,
-                       type="primary" if st.session_state.func == f else "secondary"):
+    if fcols[i + 1].button(f, key=f"fn_{f}", use_container_width=False,
+                           type="primary" if st.session_state.func == f else "secondary"):
         st.session_state.func = f
         st.session_state.metric = None
         st.rerun()
