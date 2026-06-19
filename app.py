@@ -20,8 +20,76 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 import data_loader as dl
+
+# Laser/highlight mode: injected into the parent page so it works on the table
+# rendered by st.markdown. Hover = laser-point a cell; double-click then move the
+# cursor = paint a highlight region; click to lock it. Gated by the `.laser-on`
+# body class so toggling off makes all handlers no-ops and clears highlights.
+# url() wrapper uses single quotes and the SVG attribute quotes are %22-encoded,
+# so the whole value contains NO double quotes and is safe inside a JS "..." string.
+_LASER_CUR = ("url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 "
+              "width=%2226%22 height=%2226%22%3E%3Ccircle cx=%2213%22 cy=%2213%22 r=%226%22 "
+              "fill=%22%23ff2d2d%22 fill-opacity=%220.85%22/%3E%3Ccircle cx=%2213%22 cy=%2213%22 "
+              "r=%2211%22 fill=%22none%22 stroke=%22%23ff2d2d%22 stroke-opacity=%220.45%22 "
+              "stroke-width=%222%22/%3E%3C/svg%3E') 13 13, crosshair")
+
+
+def inject_laser(enabled: bool) -> None:
+    js = (_LASER_JS
+          .replace("__ENABLED__", "true" if enabled else "false")
+          .replace("__CUR__", _LASER_CUR))
+    components.html(f"<script>{js}</script>", height=0)
+
+
+_LASER_JS = r"""
+const doc = window.parent.document;
+const ENABLED = __ENABLED__;
+const CUR = "__CUR__";
+// style (idempotent)
+let s = doc.getElementById('laser-style');
+if(!s){ s = doc.createElement('style'); s.id='laser-style'; doc.head.appendChild(s); }
+s.textContent = `
+  body.laser-on table.sheet td, body.laser-on table.sheet th { cursor: ${CUR} !important; }
+  body.laser-on table.sheet td:hover, body.laser-on table.sheet th:hover {
+      outline: 3px solid #ff2d2d; outline-offset:-3px; }
+  table.sheet td.laser-cur, table.sheet th.laser-cur {
+      box-shadow: inset 0 0 0 9999px rgba(255,45,45,.20); }
+  table.sheet td.laser-keep, table.sheet th.laser-keep {
+      box-shadow: inset 0 0 0 9999px rgba(255,45,45,.20), inset 0 0 0 2px #ff2d2d; }
+`;
+// Delegated handlers on the document, replaced each run so they never go stale
+// when Streamlit recreates this component iframe.
+if(doc.__laser){
+  doc.removeEventListener('dblclick', doc.__laser.db, true);
+  doc.removeEventListener('mousemove', doc.__laser.mm, true);
+  doc.removeEventListener('click', doc.__laser.ck, true);
+}
+let sel=false, ax=0, ay=0, tbl=null;
+const on = ()=> doc.body.classList.contains('laser-on');
+function mark(x0,y0,x1,y1){
+  const L=Math.min(x0,x1),R=Math.max(x0,x1),T=Math.min(y0,y1),B=Math.max(y0,y1);
+  tbl.querySelectorAll('td,th').forEach(c=>{
+    const r=c.getBoundingClientRect();
+    c.classList.toggle('laser-cur', r.left<R && r.right>L && r.top<B && r.bottom>T);
+  });
+}
+const db = e=>{ if(!on()) return; const td=e.target.closest('td,th');
+  const t=td&&td.closest('table.sheet'); if(!t) return;
+  sel=true; tbl=t; ax=e.clientX; ay=e.clientY; mark(ax,ay,ax,ay); e.preventDefault(); };
+const mm = e=>{ if(on() && sel && tbl) mark(ax,ay,e.clientX,e.clientY); };
+const ck = e=>{ if(on() && sel && tbl){ sel=false;
+  tbl.querySelectorAll('.laser-cur').forEach(c=>{ c.classList.remove('laser-cur'); c.classList.add('laser-keep'); }); } };
+doc.addEventListener('dblclick', db, true);
+doc.addEventListener('mousemove', mm, true);
+doc.addEventListener('click', ck, true);
+doc.__laser = {db, mm, ck};
+if(ENABLED){ doc.body.classList.add('laser-on'); }
+else { doc.body.classList.remove('laser-on');
+       doc.querySelectorAll('.laser-cur,.laser-keep').forEach(c=>c.classList.remove('laser-cur','laser-keep')); }
+"""
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -394,13 +462,21 @@ st.markdown("<div class='app-banner'>BJOC&nbsp;-&nbsp;ALL IN ONE DASHBOARD</div>
 # Function buttons (big in stage 1, small after)
 # --------------------------------------------------------------------------- #
 # breathing room below the banner: large at the start, small once a function is picked
-st.markdown(f"<div style='height:{'4.5rem' if stage == 1 else '0.4rem'}'></div>",
+st.markdown(f"<div style='height:{'7rem' if stage == 1 else '0.6rem'}'></div>",
             unsafe_allow_html=True)
-# centered, uniformly-spaced function circles (one spacer column on each side)
-fcols = st.columns([1] + [1] * len(functions) + [1])
+# centered function circles with wider gap columns between them
+_OUT, _BTN, _GAP = 1, 3, 2
+_widths, _idx = [_OUT], []
+for i in range(len(functions)):
+    if i:
+        _widths.append(_GAP)
+    _idx.append(len(_widths))
+    _widths.append(_BTN)
+_widths.append(_OUT)
+fcols = st.columns(_widths)
 for i, f in enumerate(functions):
-    if fcols[i + 1].button(f, key=f"fn_{f}", use_container_width=False,
-                           type="primary" if st.session_state.func == f else "secondary"):
+    if fcols[_idx[i]].button(f, key=f"fn_{f}", use_container_width=False,
+                             type="primary" if st.session_state.func == f else "secondary"):
         st.session_state.func = f
         st.session_state.metric = None
         st.rerun()
@@ -437,9 +513,15 @@ if not sel or sel not in {t["title"] for t in metrics}:
 # Selected metric table (with Overall / Week / Month for dated tables)
 # --------------------------------------------------------------------------- #
 tab = next(t for t in tabs if t["title"] == sel)
-st.markdown(f"<div class='metric-title'>{_esc(tab['metric'])} "
-            f"<span style='color:#94a3b8;font-weight:600;font-size:.9rem'>· {tab['function']}</span>"
-            f"<span class='accent'></span></div>", unsafe_allow_html=True)
+ttl_col, hl_col = st.columns([5, 1.6], vertical_alignment="center")
+with ttl_col:
+    st.markdown(f"<div class='metric-title'>{_esc(tab['metric'])} "
+                f"<span style='color:#94a3b8;font-weight:600;font-size:.9rem'>· {tab['function']}</span>"
+                f"<span class='accent'></span></div>", unsafe_allow_html=True)
+with hl_col:
+    hl_on = st.toggle("🔦 Highlighter", value=False, key="hl_on",
+                      help="Hover to laser-point a cell. Double-click then move the "
+                           "cursor to highlight a region; click to lock it. Toggle off to clear.")
 
 try:
     values, colors, truncated = get_grid(sel, ncols=tab["cols"], nrows=tab["rows"], tick=tick)
@@ -565,3 +647,6 @@ csv = "\n".join(
     for row in values if any(str(c).strip() for c in row)
 ).encode("utf-8")
 st.download_button("⬇️ Download (CSV)", csv, f"{sel}.csv", "text/csv")
+
+# enable/disable the laser highlighter on the rendered table(s)
+inject_laser(hl_on)
