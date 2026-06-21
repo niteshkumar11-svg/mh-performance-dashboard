@@ -382,6 +382,108 @@ def render_table(values, colors, frozen=(0, 0), merges=None,
     return "".join(html)
 
 
+def _is_num(s):
+    try:
+        float(str(s).strip().replace(",", "").replace("%", ""))
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def _sort_key(x):
+    s = str(x).strip().replace(",", "").replace("%", "")
+    try:
+        return (0, float(s))
+    except (ValueError, TypeError):
+        return (1, str(x).strip().lower())
+
+
+# Geo columns we offer as filters (case-insensitive header match)
+_GEO_NAMES = {"region", "state", "zone"}
+
+
+def render_fm(values, colors, merges, fr, fc, kp):
+    """FM metrics: flat tables with a Sort control (pick column + asc/desc) and a
+    Filter control over Region/State/Zone columns. Renders the (optionally sorted/
+    filtered) table; when nothing is applied, shows the original table untouched."""
+    def label_count(row):
+        return sum(1 for x in row if str(x).strip()
+                   and _to_date(x) is None and not _is_num(x))
+
+    hdr_idx = (max(range(min(8, len(values))), key=lambda i: label_count(values[i]))
+               if values else 0)
+    header = values[hdr_idx] if values else []
+    colnames = [(i, str(header[i]).strip()) for i in range(len(header))
+                if str(header[i]).strip()]
+    data_rows = list(range(hdr_idx + 1, len(values)))
+    geo = [(i, n) for i, n in colnames if n.lower() in _GEO_NAMES]
+
+    # working copy with geo columns forward-filled (so merged region/state cells
+    # filter & display correctly once we reorder/subset rows)
+    wv = [list(r) for r in values]
+    for ci, _ in geo:
+        last = ""
+        for r in data_rows:
+            cur = str(wv[r][ci]).strip() if ci < len(wv[r]) else ""
+            if cur:
+                last = cur
+            elif last and ci < len(wv[r]):
+                wv[r][ci] = last
+
+    c_sort, c_filt, _rest = st.columns([1, 1, 5])
+
+    # --- Sort control ---
+    opts, seen = [("— none —", None)], {}
+    for i, n in colnames:
+        lab = n if n not in seen else f"{n} ({i + 1})"
+        seen[n] = 1
+        opts.append((lab, i))
+    labmap = dict(opts)
+    with c_sort.popover("↕️ Sort", use_container_width=True):
+        choice = st.selectbox("Sort by column", [l for l, _ in opts], key=f"{kp}__sc")
+        order = st.radio("Order", ["Ascending", "Descending"], horizontal=True, key=f"{kp}__so")
+    sort_ci = labmap[choice]
+    sort_desc = (order == "Descending")
+
+    # --- Filter control (Region / State / Zone) ---
+    filters = {}
+    if geo:
+        with c_filt.popover("⛃ Filter", use_container_width=True):
+            for ci, name in geo:
+                vals = sorted({str(wv[r][ci]).strip() for r in data_rows
+                               if ci < len(wv[r]) and str(wv[r][ci]).strip()})
+                picked = st.multiselect(name, vals, key=f"{kp}__f{ci}")
+                if picked:
+                    filters[ci] = set(picked)
+
+    active = sort_ci is not None or bool(filters)
+    if not active:
+        st.markdown(render_table(values, colors, frozen=(fr, fc), merges=merges,
+                                 font_rem=font_rem, cell_w=cell_w, label_w=label_w),
+                    unsafe_allow_html=True)
+        return
+
+    drows = data_rows
+    for ci, vals in filters.items():
+        drows = [r for r in drows if ci < len(wv[r]) and str(wv[r][ci]).strip() in vals]
+    if sort_ci is not None:
+        def _cell(r):
+            return str(wv[r][sort_ci]).strip() if sort_ci < len(wv[r]) else ""
+        filled = [r for r in drows if _cell(r)]
+        blanks = [r for r in drows if not _cell(r)]
+        filled.sort(key=lambda r: _sort_key(_cell(r)), reverse=sort_desc)
+        drows = filled + blanks            # blank cells always sort to the bottom
+
+    keep = list(range(hdr_idx + 1)) + drows
+    vv, cc, _m = slice_rows(wv, colors, [], keep)   # drop merges once reordered/filtered
+    st.caption(f"Showing {len(drows)} of {len(data_rows)} rows"
+               + (f" · sorted by **{choice}** ({order.lower()})" if sort_ci is not None else "")
+               + (" · filtered" if filters else ""))
+    st.markdown(render_table(vv, cc, frozen=(fr, fc), merges=[],
+                             font_rem=font_rem, cell_w=cell_w, label_w=label_w),
+                unsafe_allow_html=True)
+
+
 # --------------------------------------------------------------------------- #
 # Data access (cached, on-demand)
 # --------------------------------------------------------------------------- #
@@ -604,7 +706,10 @@ def show_rows(keep_rows):
                 unsafe_allow_html=True)
 
 
-if len(date_starts) >= 4:
+if tab["function"] == "FM":
+    # ---- FM: flat table with Sort + Region/State Filter controls ----
+    render_fm(values, colors, merges, fr, fc, sel)
+elif len(date_starts) >= 4:
     # ---- dates across a header row: slice COLUMNS by date group (latest first) ----
     ncols_full = max(len(r) for r in values)
     first_date_col = date_starts[0][0]
