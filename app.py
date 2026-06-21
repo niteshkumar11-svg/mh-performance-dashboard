@@ -49,7 +49,9 @@ const doc = window.parent.document;
 const ENABLED = __ENABLED__;
 const CUR = "__CUR__";
 // Stack multi-row frozen headers: give each thead row a cumulative sticky `top`
-// so all frozen header rows stay visible (not just the first).
+// so ALL frozen header rows stay pinned (not just the first). Run repeatedly and
+// on every layout change so it can't be beaten by late reflow.
+const pwin = doc.defaultView || window.parent;
 function stackHeaders(){
   doc.querySelectorAll('table.sheet').forEach(t=>{
     const th = t.tHead; if(!th) return;
@@ -62,11 +64,20 @@ function stackHeaders(){
   });
 }
 stackHeaders();
-setTimeout(stackHeaders, 200); setTimeout(stackHeaders, 700);
-// re-stack after clicks (e.g. switching Overall/Week/Month tabs changes layout)
+if(pwin.requestAnimationFrame) pwin.requestAnimationFrame(stackHeaders);
+[100, 350, 800, 1600, 3000].forEach(ms => setTimeout(stackHeaders, ms));
+// re-stack on clicks (tab switches), window resize, and any table size change
 if(doc.__stackH) doc.removeEventListener('click', doc.__stackH, true);
 doc.__stackH = ()=> setTimeout(stackHeaders, 60);
 doc.addEventListener('click', doc.__stackH, true);
+if(doc.__stackR) pwin.removeEventListener('resize', doc.__stackR);
+doc.__stackR = ()=> setTimeout(stackHeaders, 60);
+pwin.addEventListener('resize', doc.__stackR);
+try{
+  if(doc.__stackRO) doc.__stackRO.disconnect();
+  doc.__stackRO = new (pwin.ResizeObserver || ResizeObserver)(()=> stackHeaders());
+  doc.querySelectorAll('table.sheet, .sheet-wrap').forEach(el => doc.__stackRO.observe(el));
+}catch(e){}
 // style (idempotent)
 let s = doc.getElementById('laser-style');
 if(!s){ s = doc.createElement('style'); s.id='laser-style'; doc.head.appendChild(s); }
