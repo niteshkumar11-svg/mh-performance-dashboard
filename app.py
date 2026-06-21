@@ -442,8 +442,25 @@ def render_fm(values, colors, merges, fr, fc, kp):
     header = values[hdr_idx] if values else []
     colnames = [(i, str(header[i]).strip()) for i in range(len(header))
                 if str(header[i]).strip()]
-    data_rows = list(range(hdr_idx + 1, len(values)))
+    # only rows with actual content (skip wholly-empty rows so forward-fill can't
+    # turn a blank row into a phantom Region/State row)
+    data_rows = [r for r in range(hdr_idx + 1, len(values))
+                 if any(str(x).strip() for x in values[r])]
     geo = [(i, n) for i, n in colnames if n.lower() in _GEO_NAMES]
+    ncols_all = max((len(r) for r in values), default=0)
+
+    # a subtotal/total row among the header rows (recomputed live when filtered)
+    subtotal_row = None
+    for hr in range(hdr_idx + 1):
+        first = str(values[hr][0]).strip().lower() if values[hr] else ""
+        if first.startswith("subtotal") or first.startswith("grand total") or first == "total":
+            subtotal_row = hr
+            break
+
+    def _is_pct_col(c):
+        vals = [str(values[r][c]).strip() for r in data_rows
+                if c < len(values[r]) and str(values[r][c]).strip()]
+        return bool(vals) and sum(v.endswith("%") for v in vals) >= len(vals) * 0.5
 
     # working copy with geo columns forward-filled (so merged region/state cells
     # filter & display correctly once we reorder/subset rows)
@@ -493,6 +510,33 @@ def render_fm(values, colors, merges, fr, fc, kp):
     drows = data_rows
     for ci, vals in filters.items():
         drows = [r for r in drows if ci < len(wv[r]) and str(wv[r][ci]).strip() in vals]
+
+    # recompute the subtotal row from the currently-visible rows (like the sheet):
+    # sum count columns; average percentage columns; leave text/label cells alone
+    if subtotal_row is not None:
+        while len(wv[subtotal_row]) < ncols_all:
+            wv[subtotal_row].append("")
+        for c in range(ncols_all):
+            if c == 0:
+                continue
+            nums = []
+            for r in drows:
+                s = str(values[r][c]).strip() if c < len(values[r]) else ""
+                if not s:
+                    continue
+                try:
+                    nums.append(float(s[:-1] if s.endswith("%") else s.replace(",", "")))
+                except ValueError:
+                    pass
+            if not nums:
+                continue
+            if _is_pct_col(c):
+                wv[subtotal_row][c] = f"{sum(nums) / len(nums):.2f}%"
+            else:
+                tot = sum(nums)
+                wv[subtotal_row][c] = (f"{tot:,.0f}" if abs(tot - round(tot)) < 1e-9
+                                       else f"{tot:,.2f}")
+
     if sort_ci is not None:
         def _cell(r):
             return str(wv[r][sort_ci]).strip() if sort_ci < len(wv[r]) else ""
