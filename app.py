@@ -429,6 +429,17 @@ def _sort_key(x):
 _GEO_NAMES = {"region", "state", "zone"}
 
 
+def _flat_controls(values):
+    """True if a flat table has a Subtotal/Total row near the TOP (first column),
+    so the Sort/Filter + live-subtotal renderer should handle it."""
+    for r in range(min(5, len(values))):
+        row = values[r] if r < len(values) else []
+        first = str(row[0]).strip().lower() if row else ""
+        if first.startswith("subtotal") or first.startswith("grand total") or first == "total":
+            return True
+    return False
+
+
 def render_fm(values, colors, merges, fr, fc, kp):
     """FM metrics: flat tables with a Sort control (pick column + asc/desc) and a
     Filter control over Region/State/Zone columns. Renders the (optionally sorted/
@@ -821,6 +832,10 @@ elif date_rows:
         mo = st.selectbox("Month", months, key="mo_sel_r",
                           format_func=lambda k: pd.Timestamp(year=k[0], month=k[1], day=1).strftime("%B %Y"))
         show_rows(head + [r for r, d in desc if (d.year, d.month) == mo])
+elif _flat_controls(values):
+    # any flat table with a top subtotal or region/state column gets the same
+    # Sort/Filter + live-subtotal treatment as FM
+    render_fm(values, colors, merges, fr, fc, sel)
 else:
     st.markdown(render_table(values, colors, frozen=(fr, fc), merges=merges,
                              font_rem=font_rem, cell_w=cell_w, label_w=label_w),
