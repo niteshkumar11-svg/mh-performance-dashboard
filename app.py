@@ -48,6 +48,25 @@ _LASER_JS = r"""
 const doc = window.parent.document;
 const ENABLED = __ENABLED__;
 const CUR = "__CUR__";
+// Stack multi-row frozen headers: give each thead row a cumulative sticky `top`
+// so all frozen header rows stay visible (not just the first).
+function stackHeaders(){
+  doc.querySelectorAll('table.sheet').forEach(t=>{
+    const th = t.tHead; if(!th) return;
+    let top = 0;
+    for(const tr of th.rows){
+      const h = tr.getBoundingClientRect().height;
+      for(const cell of tr.cells){ cell.style.top = top + 'px'; }
+      if(h) top += h;
+    }
+  });
+}
+stackHeaders();
+setTimeout(stackHeaders, 200); setTimeout(stackHeaders, 700);
+// re-stack after clicks (e.g. switching Overall/Week/Month tabs changes layout)
+if(doc.__stackH) doc.removeEventListener('click', doc.__stackH, true);
+doc.__stackH = ()=> setTimeout(stackHeaders, 60);
+doc.addEventListener('click', doc.__stackH, true);
 // style (idempotent)
 let s = doc.getElementById('laser-style');
 if(!s){ s = doc.createElement('style'); s.id='laser-style'; doc.head.appendChild(s); }
@@ -344,8 +363,13 @@ def render_table(values, colors, frozen=(0, 0), merges=None,
                 if (rr, cc) != (sr, sc):
                     covered.add((rr, cc))
 
-    # sticky header only if the sheet freezes >=1 row and no merge crosses row 0
-    use_thead = fr >= 1 and not any(r == 0 and rs > 1 for (r, _), (rs, _) in anchor.items())
+    # Freeze the first `fr` rows (sheet's setting). Don't let a vertical merge
+    # straddle the thead/tbody split (rowspans can't cross it).
+    header_n = fr
+    for (r, _c), (rs, _cs) in anchor.items():
+        if r < header_n < r + rs:
+            header_n = r
+    header_n = max(0, min(header_n, nrows))
 
     def render_row(r: int, tag: str) -> str:
         cells = []
@@ -368,11 +392,14 @@ def render_table(values, colors, frozen=(0, 0), merges=None,
             cells.append(f'<{tag}{span} style="{style}{wt}">{_esc(val)}</{tag}>')
         return "<tr>" + "".join(cells) + "</tr>"
 
-    html = [f'<div class="sheet-wrap"><table class="sheet" '
+    html = [f'<div class="sheet-wrap"><table class="sheet" data-frozenrows="{header_n}" '
             f'style="--fs:{font_rem}rem;--cw:{cell_w}em">']
-    if use_thead:
-        html.append("<thead>" + render_row(0, "th") + "</thead><tbody>")
-        start = 1
+    if header_n > 0:
+        html.append("<thead>")
+        for r in range(header_n):
+            html.append(render_row(r, "th"))
+        html.append("</thead><tbody>")
+        start = header_n
     else:
         html.append("<tbody>")
         start = 0
@@ -475,11 +502,13 @@ def render_fm(values, colors, merges, fr, fc, kp):
         drows = filled + blanks            # blank cells always sort to the bottom
 
     keep = list(range(hdr_idx + 1)) + drows
-    vv, cc, _m = slice_rows(wv, colors, [], keep)   # drop merges once reordered/filtered
+    # keep merges: header-row merges (kept in order) survive; data-row merges that
+    # become non-contiguous after sort/filter are dropped automatically by slice_rows
+    vv, cc, mm = slice_rows(wv, colors, merges, keep)
     st.caption(f"Showing {len(drows)} of {len(data_rows)} rows"
                + (f" · sorted by **{choice}** ({order.lower()})" if sort_ci is not None else "")
                + (" · filtered" if filters else ""))
-    st.markdown(render_table(vv, cc, frozen=(fr, fc), merges=[],
+    st.markdown(render_table(vv, cc, frozen=(fr, fc), merges=mm,
                              font_rem=font_rem, cell_w=cell_w, label_w=label_w),
                 unsafe_allow_html=True)
 
