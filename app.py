@@ -205,6 +205,9 @@ st.markdown(
       table.sheet th, table.sheet td{ border:1px solid #000; padding:7px 12px; text-align:center;
           vertical-align:middle; white-space:nowrap; overflow-wrap:normal; min-width:var(--cw,6em); }
       table.sheet thead th{ position:sticky; top:0; z-index:2; font-weight:700; }
+      /* long paragraph cells wrap to a readable width instead of one huge line */
+      table.sheet .wrapcell{ display:inline-block; max-width:30em; white-space:normal;
+          overflow-wrap:anywhere; text-align:left; line-height:1.35; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -398,9 +401,12 @@ def render_table(values, colors, frozen=(0, 0), merges=None,
             if tag == "th" and not bg:
                 bg = HDR_LABEL
             val = grid[r][c] if c < len(grid[r]) else ""
+            ev = _esc(val)
+            if len(str(val)) > 45:        # long paragraph -> wrap to a readable width
+                ev = f'<div class="wrapcell">{ev}</div>'
             style = _bg_style(bg) + _frozen(c, fc, tag == "th", bg, label_w)
             wt = "font-weight:700;" if (tag == "th" or r < fr) else ""
-            cells.append(f'<{tag}{span} style="{style}{wt}">{_esc(val)}</{tag}>')
+            cells.append(f'<{tag}{span} style="{style}{wt}">{ev}</{tag}>')
         return "<tr>" + "".join(cells) + "</tr>"
 
     html = [f'<div class="sheet-wrap"><table class="sheet" data-frozenrows="{header_n}" '
