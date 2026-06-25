@@ -402,7 +402,7 @@ def render_table(values, colors, frozen=(0, 0), merges=None,
                 bg = HDR_LABEL
             val = grid[r][c] if c < len(grid[r]) else ""
             ev = _esc(val)
-            if len(str(val)) > 45:        # long paragraph -> wrap to a readable width
+            if len(str(val).strip()) > 30:   # large text -> wrap to a readable width
                 ev = f'<div class="wrapcell">{ev}</div>'
             style = _bg_style(bg) + _frozen(c, fc, tag == "th", bg, label_w)
             wt = "font-weight:700;" if (tag == "th" or r < fr) else ""
