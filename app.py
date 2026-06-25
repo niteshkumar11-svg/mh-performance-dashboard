@@ -82,7 +82,7 @@ try{
 let s = doc.getElementById('laser-style');
 if(!s){ s = doc.createElement('style'); s.id='laser-style'; doc.head.appendChild(s); }
 s.textContent = `
-  body.laser-on table.sheet td, body.laser-on table.sheet th { cursor: ${CUR} !important; }
+  body.laser-on table.sheet td, body.laser-on table.sheet th { cursor: default !important; }
   body.laser-on table.sheet { user-select:none; -webkit-user-select:none; }
   body.laser-on table.sheet td:hover, body.laser-on table.sheet th:hover {
       outline: 3px solid #ff2d2d; outline-offset:-3px; }
