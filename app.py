@@ -724,16 +724,9 @@ if not sel or sel not in {t["title"] for t in metrics}:
 # Selected metric table (with Overall / Week / Month for dated tables)
 # --------------------------------------------------------------------------- #
 tab = next(t for t in tabs if t["title"] == sel)
-ttl_col, hl_col = st.columns([5, 1.6], vertical_alignment="center")
-with ttl_col:
-    st.markdown(f"<div class='metric-title'>{_esc(tab['metric'])} "
-                f"<span style='color:#94a3b8;font-weight:600;font-size:.9rem'>· {tab['function']}</span>"
-                f"<span class='accent'></span></div>", unsafe_allow_html=True)
-with hl_col:
-    hl_on = st.toggle("🔦 Highlighter", value=False, key="hl_on",
-                      help="Hover to laser-point a cell. Click-and-drag to highlight a "
-                           "region (it locks on release; drag again to add more). "
-                           "Double-click clears all; toggle off to exit.")
+st.markdown(f"<div class='metric-title'>{_esc(tab['metric'])} "
+            f"<span style='color:#94a3b8;font-weight:600;font-size:.9rem'>· {tab['function']}</span>"
+            f"<span class='accent'></span></div>", unsafe_allow_html=True)
 
 try:
     values, colors, truncated = get_grid(sel, ncols=tab["cols"], nrows=tab["rows"], tick=tick)
@@ -867,5 +860,5 @@ csv = "\n".join(
 ).encode("utf-8")
 st.download_button("⬇️ Download (CSV)", csv, f"{sel}.csv", "text/csv")
 
-# enable/disable the laser highlighter on the rendered table(s)
-inject_laser(hl_on)
+# highlighter is always on: hover outline + click-drag region highlight
+inject_laser(True)
