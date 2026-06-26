@@ -82,7 +82,7 @@ try{
 let s = doc.getElementById('laser-style');
 if(!s){ s = doc.createElement('style'); s.id='laser-style'; doc.head.appendChild(s); }
 s.textContent = `
-  body.laser-on table.sheet td, body.laser-on table.sheet th { cursor: default !important; }
+  body.laser-on table.sheet tbody td, body.laser-on table.sheet tbody th { cursor: default !important; }
   body.laser-on table.sheet { user-select:none; -webkit-user-select:none; }
   body.laser-on table.sheet td:hover, body.laser-on table.sheet th:hover {
       outline: 3px solid #ff2d2d; outline-offset:-3px; }
@@ -109,12 +109,13 @@ function mark(x0,y0,x1,y1){
   });
 }
 const md = e=>{ if(!on() || e.button!==0) return; const td=e.target.closest('td,th');
-  const t=td&&td.closest('table.sheet'); if(!t) return;
+  if(!td || td.closest('thead')) return;   // headers are for sorting, not highlighting
+  const t=td.closest('table.sheet'); if(!t) return;
   sel=true; tbl=t; ax=e.clientX; ay=e.clientY; mark(ax,ay,ax,ay); e.preventDefault(); };
 const mm = e=>{ if(on() && sel && tbl){ mark(ax,ay,e.clientX,e.clientY); e.preventDefault(); } };
 const mu = e=>{ if(on() && sel && tbl){ sel=false;
   tbl.querySelectorAll('.laser-cur').forEach(c=>{ c.classList.remove('laser-cur'); c.classList.add('laser-keep'); }); } };
-const db = e=>{ if(!on()) return;      // double-click clears all highlights
+const db = e=>{ if(!on() || e.target.closest('thead')) return;   // dbl-click body clears highlights
   doc.querySelectorAll('.laser-cur,.laser-keep').forEach(c=>c.classList.remove('laser-cur','laser-keep'));
   e.preventDefault(); };
 doc.addEventListener('mousedown', md, true);
@@ -122,6 +123,35 @@ doc.addEventListener('mousemove', mm, true);
 doc.addEventListener('mouseup',   mu, true);
 doc.addEventListener('dblclick',  db, true);
 doc.__laser = {md, mm, mu, db};
+
+// Click a header on a sortable table to sort by that column (1st click = descending,
+// click again = ascending). Blanks always sort to the bottom.
+function _colIndexOf(th){ let col=0; for(const c of th.parentElement.cells){ if(c===th) break; col += c.colSpan||1; } return col; }
+function _sortTable(t, col, dir){
+  const tb=t.tBodies[0]; if(!tb) return;
+  const num=s=>{ const n=parseFloat(String(s).replace(/[,\s%]/g,'')); return isNaN(n)?null:n; };
+  const val=r=> (col<r.cells.length ? r.cells[col].textContent.trim() : '');
+  [...tb.rows].sort((a,b)=>{
+    const sa=val(a), sb=val(b);
+    if(!sa && !sb) return 0; if(!sa) return 1; if(!sb) return -1;
+    const na=num(sa), nb=num(sb);
+    const c = (na!==null && nb!==null) ? na-nb : sa.localeCompare(sb, undefined, {numeric:true});
+    return dir==='desc' ? -c : c;
+  }).forEach(r=> tb.appendChild(r));
+}
+const sortClick = e=>{
+  const th=e.target.closest('th'); if(!th || !th.closest('thead')) return;
+  const t=th.closest('table.sheet'); if(!t || !t.dataset.sortable) return;
+  const col=_colIndexOf(th);
+  const dir=(t.__sortCol===col && t.__sortDir==='desc') ? 'asc' : 'desc';
+  t.__sortCol=col; t.__sortDir=dir;
+  _sortTable(t, col, dir);
+  t.querySelectorAll('thead th').forEach(x=>x.classList.remove('sort-asc','sort-desc'));
+  th.classList.add(dir==='desc' ? 'sort-desc' : 'sort-asc');
+};
+if(doc.__sortClick) doc.removeEventListener('click', doc.__sortClick, true);
+doc.__sortClick = sortClick;
+doc.addEventListener('click', sortClick, true);
 if(ENABLED){ doc.body.classList.add('laser-on'); }
 else { doc.body.classList.remove('laser-on');
        doc.querySelectorAll('.laser-cur,.laser-keep').forEach(c=>c.classList.remove('laser-cur','laser-keep')); }
@@ -205,6 +235,10 @@ st.markdown(
       table.sheet th, table.sheet td{ border:1px solid #000; padding:7px 12px; text-align:center;
           vertical-align:middle; white-space:nowrap; overflow-wrap:normal; min-width:var(--cw,6em); }
       table.sheet thead th{ position:sticky; top:0; z-index:2; font-weight:700; }
+      /* sortable tables: header cells are clickable and show a sort arrow */
+      table.sheet[data-sortable] thead th{ cursor:pointer; }
+      table.sheet th.sort-desc::after{ content:' \\25BC'; font-size:.72em; opacity:.85; }
+      table.sheet th.sort-asc::after{ content:' \\25B2'; font-size:.72em; opacity:.85; }
       /* long paragraph cells wrap to a readable width instead of one huge line */
       table.sheet .wrapcell{ display:inline-block; max-width:30em; white-space:normal;
           overflow-wrap:anywhere; text-align:left; line-height:1.35; }
@@ -344,7 +378,8 @@ def slice_cols(values, colors, merges, keep_cols):
 
 
 def render_table(values, colors, frozen=(0, 0), merges=None,
-                 font_rem: float = 0.9, cell_w: float = 6.0, label_w: float = 9.0) -> str:
+                 font_rem: float = 0.9, cell_w: float = 6.0, label_w: float = 9.0,
+                 sortable: bool = False) -> str:
     grid = [list(r) for r in values]
     while grid and not any(str(c).strip() for c in grid[-1]):
         grid.pop()
@@ -409,7 +444,8 @@ def render_table(values, colors, frozen=(0, 0), merges=None,
             cells.append(f'<{tag}{span} style="{style}{wt}">{ev}</{tag}>')
         return "<tr>" + "".join(cells) + "</tr>"
 
-    html = [f'<div class="sheet-wrap"><table class="sheet" data-frozenrows="{header_n}" '
+    sattr = ' data-sortable="1"' if sortable else ''
+    html = [f'<div class="sheet-wrap"><table class="sheet" data-frozenrows="{header_n}"{sattr} '
             f'style="--fs:{font_rem}rem;--cw:{cell_w}em">']
     if header_n > 0:
         html.append("<thead>")
@@ -458,9 +494,9 @@ def _flat_controls(values):
 
 
 def render_fm(values, colors, merges, fr, fc, kp):
-    """FM metrics: flat tables with a Sort control (pick column + asc/desc) and a
-    Filter control over Region/State/Zone columns. Renders the (optionally sorted/
-    filtered) table; when nothing is applied, shows the original table untouched."""
+    """Flat tables (FM + any metric with a top subtotal): a Region/State/Zone Filter
+    + live subtotal. Data rows are flattened (forward-filled geo, no row merges) and
+    the table is marked sortable so clicking a column header sorts it (handled in JS)."""
     def label_count(row):
         return sum(1 for x in row if str(x).strip()
                    and _to_date(x) is None and not _is_num(x))
@@ -502,25 +538,11 @@ def render_fm(values, colors, merges, fr, fc, kp):
             elif last and ci < len(wv[r]):
                 wv[r][ci] = last
 
-    c_sort, c_filt, _rest = st.columns([1, 1, 5])
-
-    # --- Sort control ---
-    opts, seen = [("— none —", None)], {}
-    for i, n in colnames:
-        lab = n if n not in seen else f"{n} ({i + 1})"
-        seen[n] = 1
-        opts.append((lab, i))
-    labmap = dict(opts)
-    with c_sort.popover("↕️ Sort", use_container_width=True):
-        choice = st.selectbox("Sort by column", [l for l, _ in opts], key=f"{kp}__sc")
-        order = st.radio("Order", ["Ascending", "Descending"], horizontal=True, key=f"{kp}__so")
-    sort_ci = labmap[choice]
-    sort_desc = (order == "Descending")
-
-    # --- Filter control (Region / State / Zone) ---
+    # --- Filter control (Region / State / Zone). Sorting is by clicking headers. ---
     filters = {}
     if geo:
-        with c_filt.popover("⛃ Filter", use_container_width=True):
+        fcol, _rest = st.columns([1.3, 6])
+        with fcol.popover("⛃ Filter", use_container_width=True):
             for ci, name in geo:
                 vals = sorted({str(wv[r][ci]).strip() for r in data_rows
                                if ci < len(wv[r]) and str(wv[r][ci]).strip()})
@@ -528,13 +550,7 @@ def render_fm(values, colors, merges, fr, fc, kp):
                 if picked:
                     filters[ci] = set(picked)
 
-    active = sort_ci is not None or bool(filters)
-    if not active:
-        st.markdown(render_table(values, colors, frozen=(fr, fc), merges=merges,
-                                 font_rem=font_rem, cell_w=cell_w, label_w=label_w),
-                    unsafe_allow_html=True)
-        return
-
+    # apply filter -> visible rows (kept in sheet order; click-to-sort handles ordering)
     drows = data_rows
     for ci, vals in filters.items():
         drows = [r for r in drows if ci < len(wv[r]) and str(wv[r][ci]).strip() in vals]
@@ -565,23 +581,16 @@ def render_fm(values, colors, merges, fr, fc, kp):
                 wv[subtotal_row][c] = (f"{tot:,.0f}" if abs(tot - round(tot)) < 1e-9
                                        else f"{tot:,.2f}")
 
-    if sort_ci is not None:
-        def _cell(r):
-            return str(wv[r][sort_ci]).strip() if sort_ci < len(wv[r]) else ""
-        filled = [r for r in drows if _cell(r)]
-        blanks = [r for r in drows if not _cell(r)]
-        filled.sort(key=lambda r: _sort_key(_cell(r)), reverse=sort_desc)
-        drows = filled + blanks            # blank cells always sort to the bottom
-
     keep = list(range(hdr_idx + 1)) + drows
-    # keep merges: header-row merges (kept in order) survive; data-row merges that
-    # become non-contiguous after sort/filter are dropped automatically by slice_rows
-    vv, cc, mm = slice_rows(wv, colors, merges, keep)
-    st.caption(f"Showing {len(drows)} of {len(data_rows)} rows"
-               + (f" · sorted by **{choice}** ({order.lower()})" if sort_ci is not None else "")
-               + (" · filtered" if filters else ""))
+    # keep only header-region merges (date/band rows); drop data-row merges so each
+    # data row is independent and click-to-sort can't break a rowspan
+    hmerges = [m for m in merges if m[0] <= hdr_idx]
+    vv, cc, mm = slice_rows(wv, colors, hmerges, keep)
+    if filters:
+        st.caption(f"Showing {len(drows)} of {len(data_rows)} rows · filtered")
     st.markdown(render_table(vv, cc, frozen=(fr, fc), merges=mm,
-                             font_rem=font_rem, cell_w=cell_w, label_w=label_w),
+                             font_rem=font_rem, cell_w=cell_w, label_w=label_w,
+                             sortable=True),
                 unsafe_allow_html=True)
 
 
