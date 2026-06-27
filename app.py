@@ -52,6 +52,16 @@ const CUR = "__CUR__";
 // so ALL frozen header rows stay pinned (not just the first). Run repeatedly and
 // on every layout change so it can't be beaten by late reflow.
 const pwin = doc.defaultView || window.parent;
+// Dynamic box height: each table box grows with its data down to the window
+// bottom, then scrolls inside; a short table keeps the box as tall as the data
+// (no empty space). Recomputed on every layout change via stackHeaders().
+function sizeTable(){
+  doc.querySelectorAll('.sheet-wrap').forEach(w=>{
+    const top = w.getBoundingClientRect().top;
+    const avail = Math.max(200, (pwin.innerHeight || 800) - top - 12);
+    w.style.maxHeight = avail + 'px';
+  });
+}
 function stackHeaders(){
   doc.querySelectorAll('table.sheet').forEach(t=>{
     const th = t.tHead; if(!th) return;
@@ -62,6 +72,7 @@ function stackHeaders(){
       if(h) top += h;
     }
   });
+  sizeTable();
 }
 stackHeaders();
 if(pwin.requestAnimationFrame) pwin.requestAnimationFrame(stackHeaders);
@@ -201,8 +212,10 @@ st.markdown(
       .hint{ text-align:center; color:#7b8794; padding:1.2rem; font-size:1.05rem;
           animation:fadeInUp .4s ease both; }
 
-      @keyframes fadeInUp{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
-      @keyframes popIn{ 0%{opacity:0; transform:scale(.95) translateY(10px);} 100%{opacity:1; transform:none;} }
+      /* transforms only (no opacity) so a stalled animation can never leave an
+         element invisible — the table, titles and buttons are always rendered */
+      @keyframes fadeInUp{ from{transform:translateY(10px);} to{transform:none;} }
+      @keyframes popIn{ 0%{transform:scale(.95) translateY(10px);} 100%{transform:none;} }
 
       /* pill buttons: white default, solid-blue when selected, blue-outline on hover */
       .stButton > button{ border-radius:11px; font-weight:600; border:1.5px solid #cbd5e1;
@@ -253,8 +266,15 @@ st.markdown(
 st.markdown(
     """
     <style>
-      /* taller table box so more rows are visible at a glance */
-      .sheet-wrap{ max-height:calc(100vh - 5.5rem) !important; }
+      /* The table box height is set dynamically in JS (sizeTable): it grows with
+         the data down to the window bottom, and shrinks to the data when short. */
+      /* Step-1 function picker: round "circle" buttons, centred in each column */
+      [data-testid="stMain"]:has(.fn-circle-marker) [data-testid="stButton"]{
+          display:flex; justify-content:center; }
+      [data-testid="stMain"]:has(.fn-circle-marker) .stButton>button{
+          width:104px !important; height:104px; padding:0; border-radius:50%;
+          font-size:1.2rem; font-weight:800; letter-spacing:.5px;
+          display:flex; align-items:center; justify-content:center; }
       /* prompt shown before any function is chosen */
       .pick-fn{ text-align:center; font-weight:700; color:#475569; font-size:1.02rem;
           letter-spacing:.3px; margin:.5rem 0 .55rem; animation:fadeInUp .4s ease both; }
@@ -700,12 +720,12 @@ if not functions:
 # before.  Picking one reruns into Step 2, where the nav slides to the left.
 # --------------------------------------------------------------------------- #
 if st.session_state.func is None:
-    st.markdown("<div class='pick-fn'>👇 Choose a function to begin</div>",
-                unsafe_allow_html=True)
+    st.markdown("<div class='pick-fn'>👇 Choose a function to begin</div>"
+                "<div class='fn-circle-marker'></div>", unsafe_allow_html=True)
     bcols = st.columns(len(functions))
     for i, f in enumerate(functions):
         with bcols[i]:
-            if st.button(f, key=f"fn_{f}", use_container_width=True, type="secondary"):
+            if st.button(f, key=f"fn_{f}", type="secondary"):
                 st.session_state.func = f
                 st.session_state.metric = None
                 st.rerun()
