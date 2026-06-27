@@ -261,39 +261,8 @@ st.markdown(
 )
 
 
-# Layout polish: a tall table box plus a slim left-nav column (functions +
-# metrics) that sits beside the table and slides in when a function is picked.
-st.markdown(
-    """
-    <style>
-      /* The table box height is set dynamically in JS (sizeTable): it grows with
-         the data down to the window bottom, and shrinks to the data when short. */
-      /* Step-1 function picker: round "circle" buttons, centred in each column */
-      [data-testid="stMain"]:has(.fn-circle-marker) [data-testid="stButton"]{
-          display:flex; justify-content:center; }
-      [data-testid="stMain"]:has(.fn-circle-marker) .stButton>button{
-          width:104px !important; height:104px; padding:0; border-radius:50%;
-          font-size:1.2rem; font-weight:800; letter-spacing:.5px;
-          display:flex; align-items:center; justify-content:center; }
-      /* prompt shown before any function is chosen */
-      .pick-fn{ text-align:center; font-weight:700; color:#475569; font-size:1.02rem;
-          letter-spacing:.3px; margin:.5rem 0 .55rem; animation:fadeInUp .4s ease both; }
-      /* slim left navigation column: stays put while the table scrolls and
-         slides in from the left when a function is selected */
-      [data-testid="stColumn"]:has(.leftnav-marker){
-          position:sticky; top:.4rem; align-self:flex-start;
-          animation:slideInLeft .32s ease both; }
-      [data-testid="stColumn"]:has(.leftnav-marker) .stButton>button{
-          font-size:.82rem; padding:.3rem .5rem; line-height:1.2;
-          white-space:normal; overflow-wrap:anywhere; }
-      [data-testid="stColumn"]:has(.leftnav-marker) .sec-label{ margin-top:.55rem; }
-      /* transform-only slide (no opacity) so the nav is never hidden, even if a
-         browser stalls the animation mid-flight */
-      @keyframes slideInLeft{ from{transform:translateX(-16px);} to{transform:none;} }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# The table-box height is computed dynamically in JS (sizeTable in _LASER_JS):
+# it grows with the data down to the window bottom and shrinks to fit short tables.
 
 
 # --------------------------------------------------------------------------- #
@@ -662,6 +631,9 @@ if not _has_sa():
              "`.streamlit/secrets.toml` (see README).")
     st.stop()
 
+# functions + metrics navigation lives at the top of the sidebar
+nav_ph = st.sidebar.container()
+st.sidebar.divider()
 st.sidebar.markdown("##### ⚙️ Controls")
 if st.sidebar.button("🔄 Refresh now", key="refresh_btn", use_container_width=True):
     get_meta.clear()
@@ -706,39 +678,9 @@ metrics = ([t for t in tabs if t["function"] == st.session_state.func]
            if st.session_state.func else [])
 
 # --------------------------------------------------------------------------- #
-# Banner (full width)
+# Sidebar navigation: Functions, then Metrics for the chosen function
 # --------------------------------------------------------------------------- #
-st.markdown("<div class='app-banner'>BJOC&nbsp;-&nbsp;ALL IN ONE DASHBOARD</div>",
-            unsafe_allow_html=True)
-
-if not functions:
-    st.warning("No functions found in the sheet.")
-    st.stop()
-
-# --------------------------------------------------------------------------- #
-# Step 1 — no function chosen yet: show the functions across the main area, as
-# before.  Picking one reruns into Step 2, where the nav slides to the left.
-# --------------------------------------------------------------------------- #
-if st.session_state.func is None:
-    st.markdown("<div class='pick-fn'>👇 Choose a function to begin</div>"
-                "<div class='fn-circle-marker'></div>", unsafe_allow_html=True)
-    bcols = st.columns(len(functions))
-    for i, f in enumerate(functions):
-        with bcols[i]:
-            if st.button(f, key=f"fn_{f}", type="secondary"):
-                st.session_state.func = f
-                st.session_state.metric = None
-                st.rerun()
-    st.stop()
-
-# --------------------------------------------------------------------------- #
-# Step 2 — function chosen: functions + metrics live in a slim left column and
-# the table fills the rest of the window on the right.
-# --------------------------------------------------------------------------- #
-nav_col, table_col = st.columns([1, 5], gap="medium")
-
-with nav_col:
-    st.markdown("<div class='leftnav-marker'></div>", unsafe_allow_html=True)
+with nav_ph:
     st.markdown("<div class='sec-label'>Function</div>", unsafe_allow_html=True)
     for f in functions:
         if st.button(f, key=f"fn_{f}", use_container_width=True,
@@ -746,19 +688,30 @@ with nav_col:
             st.session_state.func = f
             st.session_state.metric = None
             st.rerun()
-    st.markdown(f"<div class='sec-label'>{st.session_state.func} metrics</div>",
-                unsafe_allow_html=True)
-    for t in metrics:
-        active = st.session_state.metric == t["title"]
-        if st.button(t["metric"], key=f"mt_{t['title']}", use_container_width=True,
-                     type="primary" if active else "secondary"):
-            st.session_state.metric = t["title"]
-            st.rerun()
+    if st.session_state.func:
+        st.markdown(f"<div class='sec-label'>{st.session_state.func} metrics</div>",
+                    unsafe_allow_html=True)
+        for t in metrics:
+            active = st.session_state.metric == t["title"]
+            if st.button(t["metric"], key=f"mt_{t['title']}", use_container_width=True,
+                         type="primary" if active else "secondary"):
+                st.session_state.metric = t["title"]
+                st.rerun()
 
-with table_col:
+# --------------------------------------------------------------------------- #
+# Banner + main content (full-width table)
+# --------------------------------------------------------------------------- #
+st.markdown("<div class='app-banner'>BJOC&nbsp;-&nbsp;ALL IN ONE DASHBOARD</div>",
+            unsafe_allow_html=True)
+
+with st.container():
     sel = st.session_state.metric
+    if st.session_state.func is None:
+        st.markdown("<div class='hint'>👈 Select a function from the sidebar to begin.</div>",
+                    unsafe_allow_html=True)
+        st.stop()
     if not sel or sel not in {t["title"] for t in metrics}:
-        st.markdown("<div class='hint'>👈 Pick a metric to view its table.</div>",
+        st.markdown("<div class='hint'>👈 Pick a metric from the sidebar to view its table.</div>",
                     unsafe_allow_html=True)
         st.stop()
 
