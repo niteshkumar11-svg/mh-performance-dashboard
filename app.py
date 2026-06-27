@@ -248,30 +248,9 @@ st.markdown(
 )
 
 
-def stage_css(stage: int) -> None:
-    """Inject sizing for the current stage (1=big functions, 2=metrics, 3=table)."""
-    # function buttons are circles in every stage; big in stage 1, small after.
-    # Center the circle within its (full-width) column so columns space evenly.
-    css = ('[class*="st-key-fn_"]{ display:flex; justify-content:center; }'
-           '[class*="st-key-fn_"] .stButton{ display:flex; justify-content:center; width:100%; }')
-    if stage == 1:
-        css += """
-          [class*="st-key-fn_"] button{ width:24vh; height:24vh; border-radius:50%; padding:0;
-              font-size:2rem; font-weight:800; letter-spacing:1px; color:#fff !important;
-              border:1.5px solid var(--accent) !important; background:var(--accent) !important;
-              box-shadow:0 10px 30px rgba(31,111,235,.30); animation:popIn .5s ease both; }
-          [class*="st-key-fn_"] button:hover{ background:var(--accent2) !important;
-              border-color:var(--accent2) !important; color:#fff !important; }
-        """
-    else:
-        css += '[class*="st-key-fn_"] button{ width:3.6rem; height:3.6rem; border-radius:50%;' \
-               ' padding:0; font-size:.82rem; }'
-        if stage == 3:
-            css += (
-                '[class*="st-key-mt_"] button{ min-height:1.9rem; font-size:.78rem; padding:.2rem .4rem; }'
-                '.sheet-wrap{ max-height:calc(100vh - 8rem) !important; }'
-            )
-    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+# Make the table fill the tall main area now that nav lives in the sidebar.
+st.markdown("<style>.sheet-wrap{ max-height:calc(100vh - 7rem) !important; }</style>",
+            unsafe_allow_html=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -550,6 +529,17 @@ def render_fm(values, colors, merges, fr, fc, kp):
                 if picked:
                     filters[ci] = set(picked)
 
+    # If the sheet merges cells in the DATA region (grouped layout) and no filter is
+    # applied, render it exactly as the sheet (merges preserved). Such tables aren't
+    # sortable (reordering would break the rowspans).
+    data_merges = any(m[0] > hdr_idx for m in merges)
+    if data_merges and not filters:
+        st.markdown(render_table(values, colors, frozen=(fr, fc), merges=merges,
+                                 font_rem=font_rem, cell_w=cell_w, label_w=label_w,
+                                 sortable=False),
+                    unsafe_allow_html=True)
+        return
+
     # apply filter -> visible rows (kept in sheet order; click-to-sort handles ordering)
     drows = data_rows
     for ci, vals in filters.items():
@@ -624,12 +614,15 @@ def get_grid(title: str, ncols: int = 60, nrows: int = 60, tick: int = 0):
 # --------------------------------------------------------------------------- #
 # Sidebar
 # --------------------------------------------------------------------------- #
-st.sidebar.markdown("##### ⚙️ Controls")
 if not _has_sa():
     st.error("No service account configured. Add `gcp_service_account` to "
              "`.streamlit/secrets.toml` (see README).")
     st.stop()
 
+# left-hand navigation (functions + metrics) is rendered here once the catalogue loads
+nav_ph = st.sidebar.container()
+st.sidebar.divider()
+st.sidebar.markdown("##### ⚙️ Controls")
 if st.sidebar.button("🔄 Refresh now", key="refresh_btn", use_container_width=True):
     get_meta.clear()
     get_grid.clear()
@@ -669,63 +662,43 @@ if st.session_state.func not in functions:
     st.session_state.func = None
     st.session_state.metric = None
 
-stage = 1 if st.session_state.func is None else (3 if st.session_state.metric else 2)
-stage_css(stage)
+metrics = ([t for t in tabs if t["function"] == st.session_state.func]
+           if st.session_state.func else [])
 
 # --------------------------------------------------------------------------- #
-# Banner
+# Left navigation (sidebar): Functions, then Metrics for the chosen function
+# --------------------------------------------------------------------------- #
+with nav_ph:
+    st.markdown("<div class='sec-label'>Function</div>", unsafe_allow_html=True)
+    for f in functions:
+        if st.button(f, key=f"fn_{f}", use_container_width=True,
+                     type="primary" if st.session_state.func == f else "secondary"):
+            st.session_state.func = f
+            st.session_state.metric = None
+            st.rerun()
+    if st.session_state.func:
+        st.markdown(f"<div class='sec-label'>{st.session_state.func} metrics</div>",
+                    unsafe_allow_html=True)
+        for t in metrics:
+            active = st.session_state.metric == t["title"]
+            if st.button(t["metric"], key=f"mt_{t['title']}", use_container_width=True,
+                         type="primary" if active else "secondary"):
+                st.session_state.metric = t["title"]
+                st.rerun()
+
+# --------------------------------------------------------------------------- #
+# Banner + main content
 # --------------------------------------------------------------------------- #
 st.markdown("<div class='app-banner'>BJOC&nbsp;-&nbsp;ALL IN ONE DASHBOARD</div>",
             unsafe_allow_html=True)
 
-# --------------------------------------------------------------------------- #
-# Function buttons (big in stage 1, small after)
-# --------------------------------------------------------------------------- #
-# breathing room below the banner: large at the start, small once a function is picked
-st.markdown(f"<div style='height:{'7rem' if stage == 1 else '0.6rem'}'></div>",
-            unsafe_allow_html=True)
-# centered function circles with wider gap columns between them
-_OUT, _BTN, _GAP = 1, 3, 2
-_widths, _idx = [_OUT], []
-for i in range(len(functions)):
-    if i:
-        _widths.append(_GAP)
-    _idx.append(len(_widths))
-    _widths.append(_BTN)
-_widths.append(_OUT)
-fcols = st.columns(_widths)
-for i, f in enumerate(functions):
-    if fcols[_idx[i]].button(f, key=f"fn_{f}", use_container_width=False,
-                             type="primary" if st.session_state.func == f else "secondary"):
-        st.session_state.func = f
-        st.session_state.metric = None
-        st.rerun()
-
-if stage == 1:
-    st.markdown("<div class='hint'>👆 Select a function to begin.</div>",
+sel = st.session_state.metric
+if st.session_state.func is None:
+    st.markdown("<div class='hint'>👈 Select a function from the left to begin.</div>",
                 unsafe_allow_html=True)
     st.stop()
-
-# --------------------------------------------------------------------------- #
-# Metric buttons for the chosen function
-# --------------------------------------------------------------------------- #
-metrics = [t for t in tabs if t["function"] == st.session_state.func]
-st.markdown(f"<div class='sec-label'>{st.session_state.func} metrics</div>",
-            unsafe_allow_html=True)
-per_row = 8 if stage == 3 else 6
-for start in range(0, len(metrics), per_row):
-    row = metrics[start:start + per_row]
-    cols = st.columns(per_row)
-    for j, t in enumerate(row):
-        active = st.session_state.metric == t["title"]
-        if cols[j].button(t["metric"], key=f"mt_{t['title']}", use_container_width=True,
-                          type="primary" if active else "secondary"):
-            st.session_state.metric = t["title"]
-            st.rerun()
-
-sel = st.session_state.metric
 if not sel or sel not in {t["title"] for t in metrics}:
-    st.markdown("<div class='hint'>👆 Pick a metric to view its table.</div>",
+    st.markdown("<div class='hint'>👈 Pick a metric from the left to view its table.</div>",
                 unsafe_allow_html=True)
     st.stop()
 
