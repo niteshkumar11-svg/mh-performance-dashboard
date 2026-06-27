@@ -631,9 +631,6 @@ if not _has_sa():
              "`.streamlit/secrets.toml` (see README).")
     st.stop()
 
-# functions + metrics navigation lives at the top of the sidebar
-nav_ph = st.sidebar.container()
-st.sidebar.divider()
 st.sidebar.markdown("##### ⚙️ Controls")
 if st.sidebar.button("🔄 Refresh now", key="refresh_btn", use_container_width=True):
     get_meta.clear()
@@ -647,6 +644,9 @@ tick = 0
 if rf_sec and _HAS_AUTOREFRESH:
     tick = st_autorefresh(interval=rf_sec * 1000, key="auto_rf")
 
+st.sidebar.divider()
+# functions + metrics navigation (kept below the refresh controls)
+nav_ph = st.sidebar.container()
 st.sidebar.divider()
 font_rem = st.sidebar.slider("🔠 Table font size", 0.6, 1.5, 0.9, 0.05)
 cell_w = st.sidebar.slider("↔️ Data cell width", 2.5, 14.0, 6.0, 0.5)
