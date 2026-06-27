@@ -248,9 +248,32 @@ st.markdown(
 )
 
 
-# Make the table fill the tall main area now that nav lives in the sidebar.
-st.markdown("<style>.sheet-wrap{ max-height:calc(100vh - 7rem) !important; }</style>",
-            unsafe_allow_html=True)
+# Layout polish: a tall table box plus a slim left-nav column (functions +
+# metrics) that sits beside the table and slides in when a function is picked.
+st.markdown(
+    """
+    <style>
+      /* taller table box so more rows are visible at a glance */
+      .sheet-wrap{ max-height:calc(100vh - 5.5rem) !important; }
+      /* prompt shown before any function is chosen */
+      .pick-fn{ text-align:center; font-weight:700; color:#475569; font-size:1.02rem;
+          letter-spacing:.3px; margin:.5rem 0 .55rem; animation:fadeInUp .4s ease both; }
+      /* slim left navigation column: stays put while the table scrolls and
+         slides in from the left when a function is selected */
+      [data-testid="stColumn"]:has(.leftnav-marker){
+          position:sticky; top:.4rem; align-self:flex-start;
+          animation:slideInLeft .32s ease both; }
+      [data-testid="stColumn"]:has(.leftnav-marker) .stButton>button{
+          font-size:.82rem; padding:.3rem .5rem; line-height:1.2;
+          white-space:normal; overflow-wrap:anywhere; }
+      [data-testid="stColumn"]:has(.leftnav-marker) .sec-label{ margin-top:.55rem; }
+      /* transform-only slide (no opacity) so the nav is never hidden, even if a
+         browser stalls the animation mid-flight */
+      @keyframes slideInLeft{ from{transform:translateX(-16px);} to{transform:none;} }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -619,9 +642,6 @@ if not _has_sa():
              "`.streamlit/secrets.toml` (see README).")
     st.stop()
 
-# left-hand navigation (functions + metrics) is rendered here once the catalogue loads
-nav_ph = st.sidebar.container()
-st.sidebar.divider()
 st.sidebar.markdown("##### ⚙️ Controls")
 if st.sidebar.button("🔄 Refresh now", key="refresh_btn", use_container_width=True):
     get_meta.clear()
@@ -666,9 +686,39 @@ metrics = ([t for t in tabs if t["function"] == st.session_state.func]
            if st.session_state.func else [])
 
 # --------------------------------------------------------------------------- #
-# Left navigation (sidebar): Functions, then Metrics for the chosen function
+# Banner (full width)
 # --------------------------------------------------------------------------- #
-with nav_ph:
+st.markdown("<div class='app-banner'>BJOC&nbsp;-&nbsp;ALL IN ONE DASHBOARD</div>",
+            unsafe_allow_html=True)
+
+if not functions:
+    st.warning("No functions found in the sheet.")
+    st.stop()
+
+# --------------------------------------------------------------------------- #
+# Step 1 — no function chosen yet: show the functions across the main area, as
+# before.  Picking one reruns into Step 2, where the nav slides to the left.
+# --------------------------------------------------------------------------- #
+if st.session_state.func is None:
+    st.markdown("<div class='pick-fn'>👇 Choose a function to begin</div>",
+                unsafe_allow_html=True)
+    bcols = st.columns(len(functions))
+    for i, f in enumerate(functions):
+        with bcols[i]:
+            if st.button(f, key=f"fn_{f}", use_container_width=True, type="secondary"):
+                st.session_state.func = f
+                st.session_state.metric = None
+                st.rerun()
+    st.stop()
+
+# --------------------------------------------------------------------------- #
+# Step 2 — function chosen: functions + metrics live in a slim left column and
+# the table fills the rest of the window on the right.
+# --------------------------------------------------------------------------- #
+nav_col, table_col = st.columns([1, 5], gap="medium")
+
+with nav_col:
+    st.markdown("<div class='leftnav-marker'></div>", unsafe_allow_html=True)
     st.markdown("<div class='sec-label'>Function</div>", unsafe_allow_html=True)
     for f in functions:
         if st.button(f, key=f"fn_{f}", use_container_width=True,
@@ -676,171 +726,154 @@ with nav_ph:
             st.session_state.func = f
             st.session_state.metric = None
             st.rerun()
-    if st.session_state.func:
-        st.markdown(f"<div class='sec-label'>{st.session_state.func} metrics</div>",
+    st.markdown(f"<div class='sec-label'>{st.session_state.func} metrics</div>",
+                unsafe_allow_html=True)
+    for t in metrics:
+        active = st.session_state.metric == t["title"]
+        if st.button(t["metric"], key=f"mt_{t['title']}", use_container_width=True,
+                     type="primary" if active else "secondary"):
+            st.session_state.metric = t["title"]
+            st.rerun()
+
+with table_col:
+    sel = st.session_state.metric
+    if not sel or sel not in {t["title"] for t in metrics}:
+        st.markdown("<div class='hint'>👈 Pick a metric to view its table.</div>",
                     unsafe_allow_html=True)
-        for t in metrics:
-            active = st.session_state.metric == t["title"]
-            if st.button(t["metric"], key=f"mt_{t['title']}", use_container_width=True,
-                         type="primary" if active else "secondary"):
-                st.session_state.metric = t["title"]
-                st.rerun()
+        st.stop()
 
-# --------------------------------------------------------------------------- #
-# Banner + main content
-# --------------------------------------------------------------------------- #
-st.markdown("<div class='app-banner'>BJOC&nbsp;-&nbsp;ALL IN ONE DASHBOARD</div>",
-            unsafe_allow_html=True)
+    # ----------------------------------------------------------------------- #
+    # Selected metric table (with Overall / Week / Month for dated tables)
+    # ----------------------------------------------------------------------- #
+    tab = next(t for t in tabs if t["title"] == sel)
+    st.markdown(f"<div class='metric-title'>{_esc(tab['metric'])} "
+                f"<span style='color:#94a3b8;font-weight:600;font-size:.9rem'>· {tab['function']}</span>"
+                f"<span class='accent'></span></div>", unsafe_allow_html=True)
 
-sel = st.session_state.metric
-if st.session_state.func is None:
-    st.markdown("<div class='hint'>👈 Select a function from the left to begin.</div>",
-                unsafe_allow_html=True)
-    st.stop()
-if not sel or sel not in {t["title"] for t in metrics}:
-    st.markdown("<div class='hint'>👈 Pick a metric from the left to view its table.</div>",
-                unsafe_allow_html=True)
-    st.stop()
+    try:
+        values, colors, truncated = get_grid(sel, ncols=tab["cols"], nrows=tab["rows"], tick=tick)
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Could not load **{sel}**.\n\n```\n{exc}\n```")
+        st.stop()
 
-# --------------------------------------------------------------------------- #
-# Selected metric table (with Overall / Week / Month for dated tables)
-# --------------------------------------------------------------------------- #
-tab = next(t for t in tabs if t["title"] == sel)
-st.markdown(f"<div class='metric-title'>{_esc(tab['metric'])} "
-            f"<span style='color:#94a3b8;font-weight:600;font-size:.9rem'>· {tab['function']}</span>"
-            f"<span class='accent'></span></div>", unsafe_allow_html=True)
+    fr, fc = tab["frozen"]
+    merges = tab["merges"]
+    # strip fully-blank columns (e.g. empty space after the last date) everywhere
+    values, colors, merges = drop_blank_cols(values, colors, merges)
+    hdr_rows = max(1, fr)
 
-try:
-    values, colors, truncated = get_grid(sel, ncols=tab["cols"], nrows=tab["rows"], tick=tick)
-except Exception as exc:  # noqa: BLE001
-    st.error(f"Could not load **{sel}**.\n\n```\n{exc}\n```")
-    st.stop()
+    def _iso(d):
+        return (int(d.isocalendar().year), int(d.isocalendar().week))
 
-fr, fc = tab["frozen"]
-merges = tab["merges"]
-# strip fully-blank columns (e.g. empty space after the last date) everywhere
-values, colors, merges = drop_blank_cols(values, colors, merges)
-hdr_rows = max(1, fr)
+    def detect_date_header(grid, max_search=6):
+        """Find the row that holds the dates (search the first few rows). Returns
+        (row_index, [(col, date), ...] sorted by col). Handles multi-row headers."""
+        best_row, best = None, []
+        for r in range(min(max_search, len(grid))):
+            starts = [(c, _to_date(grid[r][c])) for c in range(len(grid[r])) if _to_date(grid[r][c])]
+            if len(starts) > len(best):
+                best, best_row = starts, r
+        return best_row, sorted(best, key=lambda x: x[0])
 
+    def date_groups_from(date_starts, ncols_full):
+        """Each date owns the columns from its start up to the next date's start
+        (so a date that visually spans several sub-columns keeps them all)."""
+        gmap = {}
+        for i, (c, d) in enumerate(date_starts):
+            end = date_starts[i + 1][0] if i + 1 < len(date_starts) else ncols_full
+            gmap.setdefault(d, []).extend(range(c, end))
+        return gmap
 
-def _iso(d):
-    return (int(d.isocalendar().year), int(d.isocalendar().week))
+    # horizontal dates (a header row anywhere in the first rows) — generic.
+    # `detect_date_header` locates date-like cells permissively; we then lock the
+    # correct format for THIS metric and re-parse (fixes DD-MM vs MM-DD sheets).
+    dr_row, date_starts = detect_date_header(values)
+    if dr_row is not None and len(date_starts) >= 4:
+        cols = [c for c, _ in date_starts]
+        parser = _choose_parser([values[dr_row][c] for c in cols])
+        date_starts = [(c, parser(values[dr_row][c])) for c in cols
+                       if parser(values[dr_row][c]) is not None]
 
+    # vertical dates (down the first column) — only if not a header-date table
+    date_rows = []
+    if len(date_starts) < 4:
+        rows0 = [(r, values[r][0]) for r in range(hdr_rows, len(values))
+                 if values[r] and _to_date(values[r][0]) is not None]
+        if len(rows0) >= 4 and rows0[0][0] <= hdr_rows + 1:
+            parser = _choose_parser([s for _, s in rows0])
+            date_rows = [(r, parser(s)) for r, s in rows0 if parser(s) is not None]
 
-def detect_date_header(grid, max_search=6):
-    """Find the row that holds the dates (search the first few rows). Returns
-    (row_index, [(col, date), ...] sorted by col). Handles multi-row headers."""
-    best_row, best = None, []
-    for r in range(min(max_search, len(grid))):
-        starts = [(c, _to_date(grid[r][c])) for c in range(len(grid[r])) if _to_date(grid[r][c])]
-        if len(starts) > len(best):
-            best, best_row = starts, r
-    return best_row, sorted(best, key=lambda x: x[0])
+    def show_cols(keep_cols, frozen):
+        v, c, m = slice_cols(values, colors, merges, keep_cols)
+        st.markdown(render_table(v, c, frozen=frozen, merges=m,
+                                 font_rem=font_rem, cell_w=cell_w, label_w=label_w),
+                    unsafe_allow_html=True)
 
+    def show_rows(keep_rows):
+        v, c, m = slice_rows(values, colors, merges, keep_rows)
+        st.markdown(render_table(v, c, frozen=(fr, fc), merges=m,
+                                 font_rem=font_rem, cell_w=cell_w, label_w=label_w),
+                    unsafe_allow_html=True)
 
-def date_groups_from(date_starts, ncols_full):
-    """Each date owns the columns from its start up to the next date's start
-    (so a date that visually spans several sub-columns keeps them all)."""
-    gmap = {}
-    for i, (c, d) in enumerate(date_starts):
-        end = date_starts[i + 1][0] if i + 1 < len(date_starts) else ncols_full
-        gmap.setdefault(d, []).extend(range(c, end))
-    return gmap
+    if tab["function"] == "FM":
+        # ---- FM: flat table with Sort + Region/State Filter controls ----
+        render_fm(values, colors, merges, fr, fc, sel)
+    elif len(date_starts) >= 4:
+        # ---- dates across a header row: slice COLUMNS by date group (latest first) ----
+        ncols_full = max(len(r) for r in values)
+        first_date_col = date_starts[0][0]
+        labels = list(range(first_date_col))            # everything before the first date
+        gmap = date_groups_from(date_starts, ncols_full)
+        dates_desc = sorted(gmap.keys(), reverse=True)
+        frz = (fr, first_date_col)                       # freeze header rows + label cols
+        t_over, t_week, t_month = st.tabs(["Overall (last 4 days)", "Week", "Month"])
+        with t_over:
+            cols = labels + [c for d in dates_desc[:4] for c in gmap[d]]
+            show_cols(cols, frz)
+        with t_week:
+            weeks = sorted({_iso(d) for d in gmap}, reverse=True)
+            wk = st.selectbox("Week", weeks, key="wk_sel", format_func=lambda k: f"Week {k[1]}, {k[0]}")
+            cols = labels + [c for d in dates_desc if _iso(d) == wk for c in gmap[d]]
+            show_cols(cols, frz)
+        with t_month:
+            months = sorted({(d.year, d.month) for d in gmap}, reverse=True)
+            mo = st.selectbox("Month", months, key="mo_sel",
+                              format_func=lambda k: pd.Timestamp(year=k[0], month=k[1], day=1).strftime("%B %Y"))
+            cols = labels + [c for d in dates_desc if (d.year, d.month) == mo for c in gmap[d]]
+            show_cols(cols, frz)
+    elif date_rows:
+        # ---- dates down the first column: slice ROWS (latest first) ----
+        head = list(range(hdr_rows))
+        desc = sorted(date_rows, key=lambda x: x[1], reverse=True)
+        t_over, t_week, t_month = st.tabs(["Overall (last 4 days)", "Week", "Month"])
+        with t_over:
+            show_rows(head + [r for r, _ in desc[:4]])
+        with t_week:
+            weeks = sorted({_iso(d) for _, d in date_rows}, reverse=True)
+            wk = st.selectbox("Week", weeks, key="wk_sel_r", format_func=lambda k: f"Week {k[1]}, {k[0]}")
+            show_rows(head + [r for r, d in desc if _iso(d) == wk])
+        with t_month:
+            months = sorted({(d.year, d.month) for _, d in date_rows}, reverse=True)
+            mo = st.selectbox("Month", months, key="mo_sel_r",
+                              format_func=lambda k: pd.Timestamp(year=k[0], month=k[1], day=1).strftime("%B %Y"))
+            show_rows(head + [r for r, d in desc if (d.year, d.month) == mo])
+    elif _flat_controls(values):
+        # any flat table with a top subtotal or region/state column gets the same
+        # Sort/Filter + live-subtotal treatment as FM
+        render_fm(values, colors, merges, fr, fc, sel)
+    else:
+        st.markdown(render_table(values, colors, frozen=(fr, fc), merges=merges,
+                                 font_rem=font_rem, cell_w=cell_w, label_w=label_w),
+                    unsafe_allow_html=True)
 
+    if truncated:
+        st.caption("⚠️ Large tab — showing the first portion of rows/columns.")
 
-# horizontal dates (a header row anywhere in the first rows) — generic.
-# `detect_date_header` locates date-like cells permissively; we then lock the
-# correct format for THIS metric and re-parse (fixes DD-MM vs MM-DD sheets).
-dr_row, date_starts = detect_date_header(values)
-if dr_row is not None and len(date_starts) >= 4:
-    cols = [c for c, _ in date_starts]
-    parser = _choose_parser([values[dr_row][c] for c in cols])
-    date_starts = [(c, parser(values[dr_row][c])) for c in cols
-                   if parser(values[dr_row][c]) is not None]
-
-# vertical dates (down the first column) — only if not a header-date table
-date_rows = []
-if len(date_starts) < 4:
-    rows0 = [(r, values[r][0]) for r in range(hdr_rows, len(values))
-             if values[r] and _to_date(values[r][0]) is not None]
-    if len(rows0) >= 4 and rows0[0][0] <= hdr_rows + 1:
-        parser = _choose_parser([s for _, s in rows0])
-        date_rows = [(r, parser(s)) for r, s in rows0 if parser(s) is not None]
-
-
-def show_cols(keep_cols, frozen):
-    v, c, m = slice_cols(values, colors, merges, keep_cols)
-    st.markdown(render_table(v, c, frozen=frozen, merges=m,
-                             font_rem=font_rem, cell_w=cell_w, label_w=label_w),
-                unsafe_allow_html=True)
-
-
-def show_rows(keep_rows):
-    v, c, m = slice_rows(values, colors, merges, keep_rows)
-    st.markdown(render_table(v, c, frozen=(fr, fc), merges=m,
-                             font_rem=font_rem, cell_w=cell_w, label_w=label_w),
-                unsafe_allow_html=True)
-
-
-if tab["function"] == "FM":
-    # ---- FM: flat table with Sort + Region/State Filter controls ----
-    render_fm(values, colors, merges, fr, fc, sel)
-elif len(date_starts) >= 4:
-    # ---- dates across a header row: slice COLUMNS by date group (latest first) ----
-    ncols_full = max(len(r) for r in values)
-    first_date_col = date_starts[0][0]
-    labels = list(range(first_date_col))            # everything before the first date
-    gmap = date_groups_from(date_starts, ncols_full)
-    dates_desc = sorted(gmap.keys(), reverse=True)
-    frz = (fr, first_date_col)                       # freeze header rows + label cols
-    t_over, t_week, t_month = st.tabs(["Overall (last 4 days)", "Week", "Month"])
-    with t_over:
-        cols = labels + [c for d in dates_desc[:4] for c in gmap[d]]
-        show_cols(cols, frz)
-    with t_week:
-        weeks = sorted({_iso(d) for d in gmap}, reverse=True)
-        wk = st.selectbox("Week", weeks, key="wk_sel", format_func=lambda k: f"Week {k[1]}, {k[0]}")
-        cols = labels + [c for d in dates_desc if _iso(d) == wk for c in gmap[d]]
-        show_cols(cols, frz)
-    with t_month:
-        months = sorted({(d.year, d.month) for d in gmap}, reverse=True)
-        mo = st.selectbox("Month", months, key="mo_sel",
-                          format_func=lambda k: pd.Timestamp(year=k[0], month=k[1], day=1).strftime("%B %Y"))
-        cols = labels + [c for d in dates_desc if (d.year, d.month) == mo for c in gmap[d]]
-        show_cols(cols, frz)
-elif date_rows:
-    # ---- dates down the first column: slice ROWS (latest first) ----
-    head = list(range(hdr_rows))
-    desc = sorted(date_rows, key=lambda x: x[1], reverse=True)
-    t_over, t_week, t_month = st.tabs(["Overall (last 4 days)", "Week", "Month"])
-    with t_over:
-        show_rows(head + [r for r, _ in desc[:4]])
-    with t_week:
-        weeks = sorted({_iso(d) for _, d in date_rows}, reverse=True)
-        wk = st.selectbox("Week", weeks, key="wk_sel_r", format_func=lambda k: f"Week {k[1]}, {k[0]}")
-        show_rows(head + [r for r, d in desc if _iso(d) == wk])
-    with t_month:
-        months = sorted({(d.year, d.month) for _, d in date_rows}, reverse=True)
-        mo = st.selectbox("Month", months, key="mo_sel_r",
-                          format_func=lambda k: pd.Timestamp(year=k[0], month=k[1], day=1).strftime("%B %Y"))
-        show_rows(head + [r for r, d in desc if (d.year, d.month) == mo])
-elif _flat_controls(values):
-    # any flat table with a top subtotal or region/state column gets the same
-    # Sort/Filter + live-subtotal treatment as FM
-    render_fm(values, colors, merges, fr, fc, sel)
-else:
-    st.markdown(render_table(values, colors, frozen=(fr, fc), merges=merges,
-                             font_rem=font_rem, cell_w=cell_w, label_w=label_w),
-                unsafe_allow_html=True)
-
-if truncated:
-    st.caption("⚠️ Large tab — showing the first portion of rows/columns.")
-
-csv = "\n".join(
-    ",".join('"' + str(c).replace('"', '""') + '"' for c in row)
-    for row in values if any(str(c).strip() for c in row)
-).encode("utf-8")
-st.download_button("⬇️ Download (CSV)", csv, f"{sel}.csv", "text/csv")
+    csv = "\n".join(
+        ",".join('"' + str(c).replace('"', '""') + '"' for c in row)
+        for row in values if any(str(c).strip() for c in row)
+    ).encode("utf-8")
+    st.download_button("⬇️ Download (CSV)", csv, f"{sel}.csv", "text/csv")
 
 # highlighter is always on: hover outline + click-drag region highlight
 inject_laser(True)
