@@ -66,9 +66,9 @@ function sizeTable(){
     const wr = w.getBoundingClientRect();
     // height of content below the box (caption / download button / padding); this is
     // invariant of the box height, so measuring it at the current height is safe.
-    let below = mainEl ? (mainEl.getBoundingClientRect().bottom - wr.bottom) : 56;
+    let below = mainEl ? (mainEl.getBoundingClientRect().bottom - wr.bottom) : 12;
     below = Math.min(Math.max(below, 0), 160);
-    const avail = Math.max(180, (pwin.innerHeight || 800) - wr.top - below - 6);
+    const avail = Math.max(180, (pwin.innerHeight || 800) - wr.top - below - 2);
     const tbl = w.querySelector('table.sheet');
     const full = tbl ? tbl.getBoundingClientRect().height + 4 : avail;
     w.style.maxHeight = Math.round(Math.min(full, avail)) + 'px';
@@ -206,7 +206,7 @@ st.markdown(
       html, body, [data-testid="stAppViewContainer"] { font-family:'Inter', system-ui, sans-serif; }
 
       .block-container,[data-testid="stMainBlockContainer"],[data-testid="stAppViewBlockContainer"]{
-          max-width:100% !important; padding:0 1.2rem 0.5rem !important; }
+          max-width:100% !important; padding:0 1.2rem 0.25rem !important; }
       header[data-testid="stHeader"]{ height:1.4rem; background:transparent; backdrop-filter:none; }
       [data-testid="stDecoration"]{ display:none; }   /* thin rainbow bar at the very top */
       [data-testid="stSidebar"]{ background:#f7f9fc; border-right:1px solid var(--line); }
@@ -863,12 +863,6 @@ with st.container():
 
     if truncated:
         st.caption("⚠️ Large tab — showing the first portion of rows/columns.")
-
-    csv = "\n".join(
-        ",".join('"' + str(c).replace('"', '""') + '"' for c in row)
-        for row in values if any(str(c).strip() for c in row)
-    ).encode("utf-8")
-    st.download_button("⬇️ Download (CSV)", csv, f"{sel}.csv", "text/csv")
 
 # highlighter is always on: hover outline + click-drag region highlight
 inject_laser(True)
