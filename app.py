@@ -620,12 +620,15 @@ def get_meta(tick: int = 0) -> list:
 
 @st.cache_data(ttl=300, show_spinner="Loading table…")
 def get_grid(title: str, ncols: int = 60, nrows: int = 60, tick: int = 0):
-    # fetch wide enough to reach the latest dates (rightmost cols), bounded by a
-    # total-cell budget so high-row tabs don't blow up the payload
-    mc = min(max(int(ncols), 60), 600)
+    # Date-grouped tables run oldest→newest left→right, so the LATEST dates live in
+    # the rightmost columns — we must fetch the full width or "last 4 days" silently
+    # shows stale dates. The sheet's rowCount is usually inflated (1000s) vs the few
+    # real rows, so size the budget generously; the API only returns rows that hold
+    # data, keeping the actual payload small.
+    mc = min(max(int(ncols), 60), 700)
     mr = min(max(int(nrows), 40), 400)
-    if mr * mc > 150_000:
-        mc = max(60, 150_000 // mr)
+    if mr * mc > 300_000:
+        mc = max(60, 300_000 // mr)
     return dl.load_tab_grid(dict(st.secrets["gcp_service_account"]), title,
                             max_rows=mr, max_cols=mc)
 
