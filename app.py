@@ -56,31 +56,22 @@ const pwin = doc.defaultView || window.parent;
 // bottom, then scrolls inside; a short table keeps the box as tall as the data
 // (no empty space). Recomputed on every layout change via stackHeaders().
 function sizeTable(){
-  // Box grows with the data: flat tables fill the window; grouped (charter/DM)
-  // tables grow to show ~4 groups so 3-4 metrics stay visible WITH full-size
-  // cells — extending past the window (page scrolls) when the rows are tall.
-  // Never taller than the data itself, and always at least one windowful.
+  // Keep the whole page inside the window so the banner, metric title and table
+  // header stay PUT and only the body rows scroll (inside the box). We reserve room
+  // for whatever renders below the box (e.g. the download button) so the page never
+  // grows its own scrollbar — otherwise scrolling would drag the header off-screen.
+  // Short tables still shrink to their own content (no empty space).
+  const mainEl = doc.querySelector('[data-testid="stMain"]') || doc.querySelector('section.main');
   doc.querySelectorAll('.sheet-wrap').forEach(w=>{
-    const wtop = w.getBoundingClientRect().top;
-    const winFill = Math.max(240, (pwin.innerHeight || 800) - wtop - 8);
+    const wr = w.getBoundingClientRect();
+    // height of content below the box (caption / download button / padding); this is
+    // invariant of the box height, so measuring it at the current height is safe.
+    let below = mainEl ? (mainEl.getBoundingClientRect().bottom - wr.bottom) : 56;
+    below = Math.min(Math.max(below, 0), 160);
+    const avail = Math.max(180, (pwin.innerHeight || 800) - wr.top - below - 6);
     const tbl = w.querySelector('table.sheet');
-    if(!tbl){ w.style.maxHeight = winFill + 'px'; return; }
-    const tr = tbl.getBoundingClientRect();
-    const full = tr.height + 6;                         // whole table height
-    // group cells = the merged left-column (Charter / DM) cells that span rows
-    const groups = [...tbl.querySelectorAll('tbody td')].filter(td =>
-        Math.abs(td.getBoundingClientRect().left - tr.left) < 3 && td.rowSpan >= 2);
-    const N = 4;
-    let target;
-    if(groups.length > N){
-      // show through the start of the (N+1)th group = N complete groups + totals
-      target = Math.max(winFill, (groups[N].getBoundingClientRect().top - tr.top) + 2);
-    } else if(groups.length >= 1){
-      target = Math.max(winFill, full);                 // few groups: show them all
-    } else {
-      target = winFill;                                 // flat table: fill the window
-    }
-    w.style.maxHeight = Math.round(Math.min(full, target)) + 'px';
+    const full = tbl ? tbl.getBoundingClientRect().height + 4 : avail;
+    w.style.maxHeight = Math.round(Math.min(full, avail)) + 'px';
   });
 }
 function stackHeaders(){
@@ -272,7 +263,7 @@ st.markdown(
       table.sheet{ border-collapse:separate; border-spacing:0; width:100%; min-width:max-content;
           font-size:var(--fs,0.9rem); font-family:'Inter', system-ui, sans-serif; }
       /* black "all borders" on every cell of every table */
-      table.sheet th, table.sheet td{ border:1px solid #000; padding:9px 12px; line-height:1.45;
+      table.sheet th, table.sheet td{ border:1px solid #000; padding:6px 11px; line-height:1.3;
           text-align:center; vertical-align:middle; white-space:nowrap; overflow-wrap:normal;
           min-width:var(--cw,6em); }
       table.sheet thead th{ position:sticky; top:0; z-index:2; font-weight:700; }
@@ -282,7 +273,7 @@ st.markdown(
       table.sheet th.sort-asc::after{ content:' \\25B2'; font-size:.72em; opacity:.85; }
       /* long paragraph cells wrap to a readable width instead of one huge line */
       table.sheet .wrapcell{ display:inline-block; max-width:30em; white-space:normal;
-          overflow-wrap:anywhere; text-align:left; line-height:1.4; }
+          overflow-wrap:anywhere; text-align:left; line-height:1.3; }
     </style>
     """,
     unsafe_allow_html=True,
