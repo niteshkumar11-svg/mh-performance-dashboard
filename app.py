@@ -56,19 +56,14 @@ const pwin = doc.defaultView || window.parent;
 // bottom, then scrolls inside; a short table keeps the box as tall as the data
 // (no empty space). Recomputed on every layout change via stackHeaders().
 function sizeTable(){
-  // Keep the whole page inside the window so the banner, metric title and table
-  // header stay PUT and only the body rows scroll (inside the box). We reserve room
-  // for whatever renders below the box (e.g. the download button) so the page never
-  // grows its own scrollbar — otherwise scrolling would drag the header off-screen.
-  // Short tables still shrink to their own content (no empty space).
-  const mainEl = doc.querySelector('[data-testid="stMain"]') || doc.querySelector('section.main');
+  // Fill the window: the box reaches (almost) the window bottom and STAYS there.
+  // A fixed margin (no re-measuring of surrounding content) keeps the height stable
+  // so it never creeps smaller after the first paint. The page itself never scrolls,
+  // so the banner, metric title and sticky header stay put and only the body rows
+  // scroll inside the box. Short tables shrink to their own content (no empty space).
   doc.querySelectorAll('.sheet-wrap').forEach(w=>{
-    const wr = w.getBoundingClientRect();
-    // height of content below the box (caption / download button / padding); this is
-    // invariant of the box height, so measuring it at the current height is safe.
-    let below = mainEl ? (mainEl.getBoundingClientRect().bottom - wr.bottom) : 12;
-    below = Math.min(Math.max(below, 0), 160);
-    const avail = Math.max(180, (pwin.innerHeight || 800) - wr.top - below - 2);
+    const wtop = w.getBoundingClientRect().top;
+    const avail = Math.max(180, (pwin.innerHeight || 800) - wtop - 6);
     const tbl = w.querySelector('table.sheet');
     const full = tbl ? tbl.getBoundingClientRect().height + 4 : avail;
     w.style.maxHeight = Math.round(Math.min(full, avail)) + 'px';
@@ -256,7 +251,7 @@ st.markdown(
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(7) .stButton>button{animation-delay:.26s}
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(8) .stButton>button{animation-delay:.30s}
 
-      .sheet-wrap{ overflow:auto; max-height:calc(100vh - 11rem); border:1.5px solid #000;
+      .sheet-wrap{ overflow:auto; max-height:calc(100vh - 12rem); border:1.5px solid #000;
           border-radius:8px; box-shadow:0 1px 4px rgba(16,42,74,.08); animation:fadeInUp .45s ease both; }
       /* width:100% so few-column tables stretch to fill the box; min-width:max-content
          keeps wide tables their natural width (horizontal scroll) */
