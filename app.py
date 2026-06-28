@@ -58,7 +58,7 @@ const pwin = doc.defaultView || window.parent;
 function sizeTable(){
   doc.querySelectorAll('.sheet-wrap').forEach(w=>{
     const top = w.getBoundingClientRect().top;
-    const avail = Math.max(200, (pwin.innerHeight || 800) - top - 12);
+    const avail = Math.max(200, (pwin.innerHeight || 800) - top - 8);
     w.style.maxHeight = avail + 'px';
   });
 }
@@ -199,18 +199,24 @@ st.markdown(
       [data-testid="stDecoration"]{ display:none; }   /* thin rainbow bar at the very top */
       [data-testid="stSidebar"]{ background:#f7f9fc; border-right:1px solid var(--line); }
 
-      .app-banner{ text-align:center; font-weight:800; font-size:1.55rem; letter-spacing:1.5px;
-          color:#fff; padding:.6rem 1rem; border-radius:14px; margin:-0.3rem 0 .5rem;
+      .app-banner{ text-align:center; font-weight:800; font-size:1.45rem; letter-spacing:1.5px;
+          color:#fff; padding:.38rem 1rem; border-radius:12px; margin:-0.4rem 0 .25rem;
           background:linear-gradient(135deg,#232323 0%,#000000 100%);
           box-shadow:0 4px 14px rgba(0,0,0,.32); }
       .sec-label{ font-weight:700; color:#64748b; font-size:.75rem; letter-spacing:.8px;
           text-transform:uppercase; margin:.35rem 0 .15rem; }
-      .metric-title{ text-align:center; font-weight:800; font-size:1.15rem; color:var(--ink);
-          margin:.3rem 0 .2rem; animation:fadeInUp .4s ease both; }
+      .metric-title{ text-align:center; font-weight:800; font-size:1.1rem; color:var(--ink);
+          margin:.1rem 0 .05rem; animation:fadeInUp .4s ease both; }
       .metric-title .accent{ display:block; width:54px; height:3px; border-radius:3px;
           margin:.25rem auto 0; background:linear-gradient(90deg,var(--accent),#7aa7ff); }
       .hint{ text-align:center; color:#7b8794; padding:1.2rem; font-size:1.05rem;
           animation:fadeInUp .4s ease both; }
+      /* compact vertical rhythm in the main area so the table box gets the most
+         height (lets ~3 metric groups show at once) */
+      [data-testid="stMain"] [data-testid="stVerticalBlock"]{ gap:.4rem; }
+      [data-baseweb="tab-list"]{ margin-bottom:.1rem; }
+      button[data-baseweb="tab"]{ padding-top:.2rem; padding-bottom:.2rem; }
+      [data-baseweb="tab-panel"]{ padding-top:.1rem; }
 
       /* transforms only (no opacity) so a stalled animation can never leave an
          element invisible — the table, titles and buttons are always rendered */
@@ -245,8 +251,9 @@ st.markdown(
       table.sheet{ border-collapse:separate; border-spacing:0; width:100%; min-width:max-content;
           font-size:var(--fs,0.9rem); font-family:'Inter', system-ui, sans-serif; }
       /* black "all borders" on every cell of every table */
-      table.sheet th, table.sheet td{ border:1px solid #000; padding:7px 12px; text-align:center;
-          vertical-align:middle; white-space:nowrap; overflow-wrap:normal; min-width:var(--cw,6em); }
+      table.sheet th, table.sheet td{ border:1px solid #000; padding:3px 10px; line-height:1.18;
+          text-align:center; vertical-align:middle; white-space:nowrap; overflow-wrap:normal;
+          min-width:var(--cw,6em); }
       table.sheet thead th{ position:sticky; top:0; z-index:2; font-weight:700; }
       /* sortable tables: header cells are clickable and show a sort arrow */
       table.sheet[data-sortable] thead th{ cursor:pointer; }
@@ -254,7 +261,7 @@ st.markdown(
       table.sheet th.sort-asc::after{ content:' \\25B2'; font-size:.72em; opacity:.85; }
       /* long paragraph cells wrap to a readable width instead of one huge line */
       table.sheet .wrapcell{ display:inline-block; max-width:30em; white-space:normal;
-          overflow-wrap:anywhere; text-align:left; line-height:1.35; }
+          overflow-wrap:anywhere; text-align:left; line-height:1.18; }
     </style>
     """,
     unsafe_allow_html=True,
