@@ -572,13 +572,20 @@ def render_fm(values, colors, merges, fr, fc, kp):
         drows = [r for r in drows if ci < len(wv[r]) and str(wv[r][ci]).strip() in vals]
 
     # recompute the subtotal row from the currently-visible rows (like the sheet):
-    # sum count columns; average percentage columns; leave text/label cells alone
+    # sum count columns, average percentage columns, leave text/label cells alone.
+    # A value column with NO visible values must read 0 — not the stale full total.
+    def _is_val_col(c):
+        vals = [str(values[r][c]).strip() for r in data_rows
+                if c < len(values[r]) and str(values[r][c]).strip()]
+        return bool(vals) and sum(1 for v in vals
+                                  if v.endswith("%") or _is_num(v)) >= len(vals) * 0.5
+
     if subtotal_row is not None:
         while len(wv[subtotal_row]) < ncols_all:
             wv[subtotal_row].append("")
-        for c in range(ncols_all):
-            if c == 0:
-                continue
+        for c in range(1, ncols_all):
+            if not _is_val_col(c):
+                continue                       # text/label column — leave it as-is
             nums = []
             for r in drows:
                 s = str(values[r][c]).strip() if c < len(values[r]) else ""
@@ -588,12 +595,10 @@ def render_fm(values, colors, merges, fr, fc, kp):
                     nums.append(float(s[:-1] if s.endswith("%") else s.replace(",", "")))
                 except ValueError:
                     pass
-            if not nums:
-                continue
             if _is_pct_col(c):
-                wv[subtotal_row][c] = f"{sum(nums) / len(nums):.2f}%"
+                wv[subtotal_row][c] = f"{sum(nums) / len(nums):.2f}%" if nums else ""
             else:
-                tot = sum(nums)
+                tot = sum(nums)                # 0 when no visible row has a value
                 wv[subtotal_row][c] = (f"{tot:,.0f}" if abs(tot - round(tot)) < 1e-9
                                        else f"{tot:,.2f}")
 
