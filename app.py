@@ -210,12 +210,31 @@ st.markdown(
           max-width:100% !important; padding:2.6rem 1.2rem 0.25rem !important; }
       header[data-testid="stHeader"]{ background:transparent !important; backdrop-filter:none; }
       [data-testid="stDecoration"]{ display:none; }   /* thin rainbow bar at the very top */
-      [data-testid="stSidebar"]{ background:#f7f9fc; border-right:1px solid var(--line); }
+      /* Sidebar: a fixed slate panel with light-text menu items (both themes) */
+      [data-testid="stSidebar"]{ background:linear-gradient(180deg,#3b5169 0%,#2b3d4f 100%) !important;
+          border-right:1px solid rgba(0,0,0,.28); }
+      [data-testid="stSidebar"] h5, [data-testid="stSidebar"] label,
+      [data-testid="stSidebar"] p, [data-testid="stSidebar"] span{ color:#e7eef6 !important; }
+      [data-testid="stSidebar"] .sec-label{ color:#9fb3c8 !important; }
+      /* function / metric buttons: flat translucent, light text; selected = accent */
+      [data-testid="stSidebar"] .stButton>button{ background:rgba(255,255,255,.07) !important;
+          border:1px solid rgba(255,255,255,.18) !important; box-shadow:none !important; }
+      [data-testid="stSidebar"] .stButton>button *{ color:#e7eef6 !important; }
+      [data-testid="stSidebar"] .stButton>button:hover{ background:rgba(255,255,255,.16) !important;
+          border-color:rgba(255,255,255,.42) !important; transform:translateY(-1px); }
+      [data-testid="stSidebar"] .stButton>button[kind="primary"]{ background:var(--accent) !important;
+          border-color:var(--accent) !important; }
+      [data-testid="stSidebar"] .stButton>button[kind="primary"] *{ color:#fff !important; }
+      /* keep the Auto-refresh selectbox a white field with dark text */
+      [data-testid="stSidebar"] [data-baseweb="select"]>div{ background:#fff !important; border-radius:8px; }
+      [data-testid="stSidebar"] [data-baseweb="select"] div,
+      [data-testid="stSidebar"] [data-baseweb="select"] span,
+      [data-testid="stSidebar"] [data-baseweb="select"] input{ color:#1f2d3d !important; }
 
       .app-banner{ text-align:center; font-weight:800; font-size:1.45rem; letter-spacing:1.5px;
-          color:#fff; padding:.38rem 1rem; border-radius:12px; margin:0 0 .25rem;
-          background:linear-gradient(135deg,#232323 0%,#000000 100%);
-          box-shadow:0 4px 14px rgba(0,0,0,.32); }
+          color:#fff; padding:.42rem 1rem; border-radius:12px; margin:0 0 .3rem;
+          background:linear-gradient(135deg,#3b5169 0%,#2b3d4f 100%);
+          box-shadow:0 4px 14px rgba(31,45,61,.28); }
       .sec-label{ font-weight:700; color:#64748b; font-size:.75rem; letter-spacing:.8px;
           text-transform:uppercase; margin:.35rem 0 .15rem; }
       .metric-title{ text-align:center; font-weight:800; font-size:1.1rem; color:var(--ink);
@@ -286,10 +305,10 @@ st.markdown(
 # the whole app — chrome AND tables — follows our palette regardless of the browser
 # or Streamlit theme. Sheet-coloured cells keep their own text colour (set inline,
 # keyed to the cell's own background) so they stay readable in either mode.
-_PALETTE = ("--page-bg:#0e1117; --side-bg:#161a23; --ink:#e6e9ef; --muted:#9aa4b2; "
+_PALETTE = ("--page-bg:#0e1117; --ink:#e6e9ef; --muted:#9aa4b2; "
             "--cell-bg:#0e1117; --cell-fg:#e6e9ef; --cell-border:#3a414d; --line:#2a2f3a;"
             if DARK else
-            "--page-bg:#ffffff; --side-bg:#f7f9fc; --ink:#102a4a; --muted:#64748b; "
+            "--page-bg:#e9eef5; --ink:#1f2d3d; --muted:#64748b; "
             "--cell-bg:#ffffff; --cell-fg:#1f2d3d; --cell-border:#000000; --line:#dbe2ea;")
 _SCHEME = "dark" if DARK else "light"
 st.markdown(
@@ -299,7 +318,7 @@ st.markdown(
       :root, .stApp, [data-testid="stApp"]{{
           {_PALETTE}
           --background-color:var(--page-bg) !important;
-          --secondary-background-color:var(--side-bg) !important;
+          --secondary-background-color:var(--cell-bg) !important;
           --text-color:var(--ink) !important;
           color-scheme:{_SCHEME} !important; }}
       .stApp, [data-testid="stApp"], [data-testid="stAppViewContainer"],
@@ -307,10 +326,11 @@ st.markdown(
           background-color:var(--page-bg) !important; color:var(--ink); }}
       /* keep the top toolbar transparent so it never covers the banner */
       [data-testid="stHeader"]{{ background:transparent !important; }}
-      [data-testid="stSidebar"], [data-testid="stSidebarContent"],
-      [data-testid="stSidebarUserContent"]{{ background-color:var(--side-bg) !important; color:var(--ink); }}
-      [data-baseweb="tab"]{{ color:var(--ink) !important; }}
-      [data-testid="stMarkdownContainer"], [data-testid="stCaptionContainer"]{{ color:var(--ink); }}
+      /* MAIN-area text follows the light/dark palette; the sidebar is styled
+         separately (fixed slate panel) so these must not touch it */
+      [data-testid="stMain"] [data-baseweb="tab"]{{ color:var(--ink) !important; }}
+      [data-testid="stMain"] [data-testid="stMarkdownContainer"],
+      [data-testid="stMain"] [data-testid="stCaptionContainer"]{{ color:var(--ink); }}
       .metric-title{{ color:var(--ink) !important; }}
       .sheet-wrap{{ background:var(--cell-bg); }}
       table.sheet{{ color:var(--cell-fg); }}
