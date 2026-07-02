@@ -216,20 +216,25 @@ st.markdown(
       header[data-testid="stHeader"] *{ pointer-events:auto; }  /* keep controls clickable */
       [data-testid="stToolbar"], [data-testid="stStatusWidget"]{ display:none !important; }
       [data-testid="stDecoration"]{ display:none !important; }   /* thin rainbow bar at the very top */
-      /* the "open sidebar" (expand) arrow lives in the header — raise it above the
-         banner and give it a visible slate pill so a collapsed sidebar can be reopened */
-      [data-testid="stExpandSidebarButton"]{ z-index:1001 !important; }
-      [data-testid="stExpandSidebarButton"] button{ background:#42556a !important; color:#fff !important;
-          border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.3); opacity:1 !important; }
+      /* Keep the sidebar permanently open: hide the collapse control so it can never
+         be closed with no way to reopen it (the native expand arrow is unreliable).
+         Combined with initial_sidebar_state="expanded", the sidebar is always shown. */
+      [data-testid="stSidebarCollapseButton"]{ display:none !important; }
       /* collapse invisible helper wrappers so they don't reserve blank space above
          the banner: injected <style> blocks (the CSS still applies globally) and the
          0-height auto-refresh iframe (its timer keeps running at zero height) */
       [data-testid="stMain"] [data-testid="stElementContainer"]:has(style){ display:none !important; }
       [data-testid="stMain"] [data-testid="stElementContainer"]:has(iframe[title*="autorefresh"]){
           height:0 !important; min-height:0 !important; margin:0 !important; overflow:hidden !important; }
-      /* Sidebar: a medium-slate panel with light-text menu items (both themes) */
+      /* Sidebar: a medium-slate panel with light-text menu items (both themes).
+         Force it permanently OPEN (override any collapse: width / transform / margin)
+         so it can never disappear with no way to reopen it. */
       [data-testid="stSidebar"]{ background:linear-gradient(180deg,#54697e 0%,#42556a 100%) !important;
-          border-right:1px solid rgba(0,0,0,.22); }
+          border-right:1px solid rgba(0,0,0,.22);
+          transform:none !important; margin-left:0 !important; left:0 !important;
+          min-width:300px !important; width:300px !important; visibility:visible !important; }
+      [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"]{
+          visibility:visible !important; }
       [data-testid="stSidebar"] h5, [data-testid="stSidebar"] label,
       [data-testid="stSidebar"] p, [data-testid="stSidebar"] span{ color:#eaf0f7 !important; }
       [data-testid="stSidebar"] .sec-label{ color:#c2cedb !important; }
