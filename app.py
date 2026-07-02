@@ -275,6 +275,43 @@ st.markdown(
 )
 
 
+# Force the dashboard's light appearance regardless of the browser / Streamlit
+# dark theme. The tables reproduce the sheet's own (light) colours with dark text,
+# so a dark surface makes them unreadable. We override Streamlit's theme CSS
+# variables and pin light backgrounds + dark default text; the banner and any
+# sheet-coloured cells keep their own explicit colours.
+st.markdown(
+    """
+    <style>
+      html{ color-scheme:light !important; }
+      :root, .stApp, [data-testid="stApp"]{
+          --background-color:#ffffff !important;
+          --secondary-background-color:#eef2f7 !important;
+          --text-color:#1f2d3d !important;
+          --default-textColor:#1f2d3d !important;
+          --border-color:#cbd5e1 !important;
+          color-scheme:light !important; }
+      .stApp, [data-testid="stApp"], [data-testid="stAppViewContainer"],
+      [data-testid="stMain"], [data-testid="stMainBlockContainer"],
+      [data-testid="stHeader"], [data-testid="stBottom"]{
+          background-color:#ffffff !important; color:#1f2d3d; }
+      [data-testid="stSidebar"], [data-testid="stSidebarContent"],
+      [data-testid="stSidebarUserContent"]{
+          background-color:#f7f9fc !important; color:#1f2d3d; }
+      /* Streamlit widgets that follow the theme: tabs, captions, markdown text */
+      [data-baseweb="tab"]{ color:#1f2d3d !important; }
+      [data-testid="stMarkdownContainer"], [data-testid="stCaptionContainer"]{ color:#1f2d3d; }
+      /* the table stays a self-contained light island; inline white text on dark
+         sheet-coloured cells still wins (it is set as an inline style) */
+      .sheet-wrap{ background:#ffffff; }
+      table.sheet{ color:#1f2d3d; background:#ffffff; }
+      table.sheet th, table.sheet td{ color:#1f2d3d; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 # The table-box height is computed dynamically in JS (sizeTable in _LASER_JS):
 # it grows with the data down to the window bottom and shrinks to fit short tables.
 

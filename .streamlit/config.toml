@@ -1,0 +1,5 @@
+# The dashboard is designed for a light surface (it reproduces the Google Sheet's
+# own light cell colours). Default to the light theme; app.py also forces a light
+# appearance via CSS so it stays readable even if a viewer switches to dark mode.
+[theme]
+base = "light"
