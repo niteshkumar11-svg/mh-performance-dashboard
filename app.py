@@ -207,24 +207,36 @@ st.markdown(
       html, body, [data-testid="stAppViewContainer"] { font-family:'Inter', system-ui, sans-serif; }
 
       .block-container,[data-testid="stMainBlockContainer"],[data-testid="stAppViewBlockContainer"]{
-          max-width:100% !important; padding:2.6rem 1.2rem 0.25rem !important; }
-      header[data-testid="stHeader"]{ background:transparent !important; backdrop-filter:none; }
-      [data-testid="stDecoration"]{ display:none; }   /* thin rainbow bar at the very top */
+          max-width:100% !important; padding:0.7rem 1.2rem 0.25rem !important; }
+      /* remove the Streamlit toolbar / header / menu / status widget entirely */
+      header[data-testid="stHeader"]{ display:none !important; }
+      [data-testid="stToolbar"], [data-testid="stStatusWidget"]{ display:none !important; }
+      [data-testid="stDecoration"]{ display:none !important; }   /* thin rainbow bar at the very top */
+      /* collapse invisible helper wrappers so they don't reserve blank space above
+         the banner: injected <style> blocks (the CSS still applies globally) and the
+         0-height auto-refresh iframe (its timer keeps running at zero height) */
+      [data-testid="stMain"] [data-testid="stElementContainer"]:has(style){ display:none !important; }
+      [data-testid="stMain"] [data-testid="stElementContainer"]:has(iframe[title*="autorefresh"]){
+          height:0 !important; min-height:0 !important; margin:0 !important; overflow:hidden !important; }
       /* Sidebar: a fixed slate panel with light-text menu items (both themes) */
       [data-testid="stSidebar"]{ background:linear-gradient(180deg,#3b5169 0%,#2b3d4f 100%) !important;
           border-right:1px solid rgba(0,0,0,.28); }
       [data-testid="stSidebar"] h5, [data-testid="stSidebar"] label,
       [data-testid="stSidebar"] p, [data-testid="stSidebar"] span{ color:#e7eef6 !important; }
       [data-testid="stSidebar"] .sec-label{ color:#9fb3c8 !important; }
-      /* function / metric buttons: flat translucent, light text; selected = accent */
-      [data-testid="stSidebar"] .stButton>button{ background:rgba(255,255,255,.07) !important;
-          border:1px solid rgba(255,255,255,.18) !important; box-shadow:none !important; }
-      [data-testid="stSidebar"] .stButton>button *{ color:#e7eef6 !important; }
-      [data-testid="stSidebar"] .stButton>button:hover{ background:rgba(255,255,255,.16) !important;
-          border-color:rgba(255,255,255,.42) !important; transform:translateY(-1px); }
-      [data-testid="stSidebar"] .stButton>button[kind="primary"]{ background:var(--accent) !important;
-          border-color:var(--accent) !important; }
-      [data-testid="stSidebar"] .stButton>button[kind="primary"] *{ color:#fff !important; }
+      /* function / metric buttons: FLAT left-aligned menu items (like the reference);
+         inactive = light text, selected = accent-blue text with an accent left bar */
+      [data-testid="stSidebar"] .stButton>button{ background:transparent !important;
+          border:none !important; border-left:3px solid transparent !important; box-shadow:none !important;
+          border-radius:8px; justify-content:flex-start !important; text-align:left !important;
+          padding:.42rem .7rem !important; font-weight:600; transition:all .12s ease; }
+      [data-testid="stSidebar"] .stButton>button *{ color:#cdd9e6 !important; text-align:left; }
+      [data-testid="stSidebar"] .stButton>button:hover{ background:rgba(255,255,255,.08) !important;
+          transform:none !important; }
+      [data-testid="stSidebar"] .stButton>button:hover *{ color:#ffffff !important; }
+      [data-testid="stSidebar"] .stButton>button[kind="primary"]{ background:rgba(31,111,235,.16) !important;
+          border-left:3px solid var(--accent) !important; }
+      [data-testid="stSidebar"] .stButton>button[kind="primary"] *{ color:#67a8ff !important; font-weight:700; }
       /* keep the Auto-refresh selectbox a white field with dark text */
       [data-testid="stSidebar"] [data-baseweb="select"]>div{ background:#fff !important; border-radius:8px; }
       [data-testid="stSidebar"] [data-baseweb="select"] div,
