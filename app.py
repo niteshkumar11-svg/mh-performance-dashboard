@@ -229,7 +229,7 @@ st.markdown(
          disappear with no way to reopen it. */
       [data-testid="stSidebar"]{ background:#eef2f8 !important; border-right:1px solid #d3dae3;
           transform:none !important; margin-left:0 !important; left:0 !important;
-          min-width:150px !important; width:150px !important; max-width:150px !important;
+          min-width:200px !important; width:200px !important; max-width:200px !important;
           visibility:visible !important; }
       [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"]{ visibility:visible !important; }
       [data-testid="stSidebar"] h5, [data-testid="stSidebar"] label,
@@ -240,9 +240,12 @@ st.markdown(
       [data-testid="stSidebar"] .stButton>button{ background:transparent !important;
           border:none !important; border-left:3px solid transparent !important; box-shadow:none !important;
           border-radius:8px; justify-content:flex-start !important; text-align:left !important;
-          padding:.38rem .45rem !important; font-weight:600; transition:all .12s ease; }
-      [data-testid="stSidebar"] .stButton>button *{ color:#334155 !important; text-align:left;
-          white-space:normal; overflow-wrap:anywhere; }
+          padding:.38rem .55rem !important; font-weight:600; transition:all .12s ease; }
+      [data-testid="stSidebar"] .stButton>button *{ color:#334155 !important; text-align:left !important;
+          justify-content:flex-start !important; white-space:normal; overflow-wrap:anywhere; }
+      [data-testid="stSidebar"] .stButton>button [data-testid="stMarkdownContainer"]{
+          width:100% !important; text-align:left !important; }
+      [data-testid="stSidebar"] .stButton>button p{ text-align:left !important; width:100%; margin:0; }
       [data-testid="stSidebar"] .stButton>button:hover{ background:rgba(31,111,235,.08) !important;
           transform:none !important; }
       [data-testid="stSidebar"] .stButton>button:hover *{ color:var(--accent) !important; }
