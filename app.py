@@ -56,17 +56,15 @@ const pwin = doc.defaultView || window.parent;
 // bottom, then scrolls inside; a short table keeps the box as tall as the data
 // (no empty space). Recomputed on every layout change via stackHeaders().
 function sizeTable(){
-  // Fill the window: the box reaches (almost) the window bottom and STAYS there.
-  // A fixed margin (no re-measuring of surrounding content) keeps the height stable
-  // so it never creeps smaller after the first paint. The page itself never scrolls,
-  // so the banner, metric title and sticky header stay put and only the body rows
-  // scroll inside the box. Short tables shrink to their own content (no empty space).
+  // The table box fills down to the window bottom so there is NO empty space below
+  // it (short tables just show empty rows inside the box). A fixed margin keeps the
+  // height stable after the first paint; the page never scrolls, so the banner,
+  // metric title and sticky header stay put and only the body rows scroll inside.
   doc.querySelectorAll('.sheet-wrap').forEach(w=>{
     const wtop = w.getBoundingClientRect().top;
-    const avail = Math.max(180, (pwin.innerHeight || 800) - wtop - 6);
-    const tbl = w.querySelector('table.sheet');
-    const full = tbl ? tbl.getBoundingClientRect().height + 4 : avail;
-    w.style.maxHeight = Math.round(Math.min(full, avail)) + 'px';
+    const avail = Math.round(Math.max(180, (pwin.innerHeight || 800) - wtop - 4));
+    w.style.height = avail + 'px';
+    w.style.maxHeight = avail + 'px';
   });
 }
 function stackHeaders(){
@@ -207,7 +205,7 @@ st.markdown(
       html, body, [data-testid="stAppViewContainer"] { font-family:'Inter', system-ui, sans-serif; }
 
       .block-container,[data-testid="stMainBlockContainer"],[data-testid="stAppViewBlockContainer"]{
-          max-width:100% !important; padding:0.7rem 1.2rem 0.25rem !important; }
+          max-width:100% !important; padding:0.7rem 1.2rem 0 !important; }
       /* Keep the Streamlit header (so the collapsed-sidebar EXPAND arrow keeps
          working) but make it transparent and hide only the toolbar / menu / status.
          The header does not cover the banner because it is transparent. */
@@ -226,32 +224,32 @@ st.markdown(
       [data-testid="stMain"] [data-testid="stElementContainer"]:has(style){ display:none !important; }
       [data-testid="stMain"] [data-testid="stElementContainer"]:has(iframe[title*="autorefresh"]){
           height:0 !important; min-height:0 !important; margin:0 !important; overflow:hidden !important; }
-      /* Sidebar: a medium-slate panel with light-text menu items (both themes).
-         Force it permanently OPEN (override any collapse: width / transform / margin)
-         so it can never disappear with no way to reopen it. */
-      [data-testid="stSidebar"]{ background:linear-gradient(180deg,#54697e 0%,#42556a 100%) !important;
-          border-right:1px solid rgba(0,0,0,.22);
+      /* Sidebar: a slim, LIGHT panel with dark-text menu items. Forced permanently
+         OPEN (override any collapse: width / transform / margin) so it can never
+         disappear with no way to reopen it. */
+      [data-testid="stSidebar"]{ background:#eef2f8 !important; border-right:1px solid #d3dae3;
           transform:none !important; margin-left:0 !important; left:0 !important;
-          min-width:300px !important; width:300px !important; visibility:visible !important; }
-      [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"]{
+          min-width:150px !important; width:150px !important; max-width:150px !important;
           visibility:visible !important; }
+      [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"]{ visibility:visible !important; }
       [data-testid="stSidebar"] h5, [data-testid="stSidebar"] label,
-      [data-testid="stSidebar"] p, [data-testid="stSidebar"] span{ color:#eaf0f7 !important; }
-      [data-testid="stSidebar"] .sec-label{ color:#c2cedb !important; }
-      /* function / metric buttons: FLAT left-aligned menu items (like the reference);
-         inactive = light text, selected = accent-blue text with an accent left bar */
+      [data-testid="stSidebar"] p, [data-testid="stSidebar"] span{ color:#1f2d3d !important; }
+      [data-testid="stSidebar"] .sec-label{ color:#64748b !important; }
+      /* function / metric buttons: FLAT left-aligned menu items, dark text;
+         selected = accent-blue text with an accent left bar */
       [data-testid="stSidebar"] .stButton>button{ background:transparent !important;
           border:none !important; border-left:3px solid transparent !important; box-shadow:none !important;
           border-radius:8px; justify-content:flex-start !important; text-align:left !important;
-          padding:.42rem .7rem !important; font-weight:600; transition:all .12s ease; }
-      [data-testid="stSidebar"] .stButton>button *{ color:#e8eef6 !important; text-align:left; }
-      [data-testid="stSidebar"] .stButton>button:hover{ background:rgba(255,255,255,.08) !important;
+          padding:.38rem .45rem !important; font-weight:600; transition:all .12s ease; }
+      [data-testid="stSidebar"] .stButton>button *{ color:#334155 !important; text-align:left;
+          white-space:normal; overflow-wrap:anywhere; }
+      [data-testid="stSidebar"] .stButton>button:hover{ background:rgba(31,111,235,.08) !important;
           transform:none !important; }
-      [data-testid="stSidebar"] .stButton>button:hover *{ color:#ffffff !important; }
-      [data-testid="stSidebar"] .stButton>button[kind="primary"]{ background:rgba(31,111,235,.16) !important;
+      [data-testid="stSidebar"] .stButton>button:hover *{ color:var(--accent) !important; }
+      [data-testid="stSidebar"] .stButton>button[kind="primary"]{ background:rgba(31,111,235,.12) !important;
           border-left:3px solid var(--accent) !important; }
-      [data-testid="stSidebar"] .stButton>button[kind="primary"] *{ color:#67a8ff !important; font-weight:700; }
-      /* keep the Auto-refresh selectbox a white field with dark text */
+      [data-testid="stSidebar"] .stButton>button[kind="primary"] *{ color:var(--accent) !important; font-weight:700; }
+      /* Auto-refresh selectbox: white field with dark text */
       [data-testid="stSidebar"] [data-baseweb="select"]>div{ background:#fff !important; border-radius:8px; }
       [data-testid="stSidebar"] [data-baseweb="select"] div,
       [data-testid="stSidebar"] [data-baseweb="select"] span,
