@@ -440,7 +440,7 @@ def choose_parser(strings):
 
     def parse(s):
         s2 = str(s).strip()
-        if not s2 or len(s2) < 6:
+        if not s2 or len(s2) < 5:        # allow year-less single-digit days, e.g. "1-Jul"
             return None
         d = _parse_group(s2, grp)
         return d if d is not None else to_date(s2)
