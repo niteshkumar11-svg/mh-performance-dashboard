@@ -208,19 +208,19 @@ st.markdown(
 
       .block-container,[data-testid="stMainBlockContainer"],[data-testid="stAppViewBlockContainer"]{
           max-width:100% !important; padding:0.7rem 1.2rem 0.25rem !important; }
-      /* Remove the toolbar/menu but KEEP the sidebar expand control usable: make the
-         header a zero-height transparent overlay so the banner still sits at the top
-         AND the collapsed-sidebar expand arrow still shows (top-left). */
-      header[data-testid="stHeader"]{ position:absolute !important; top:0; left:0; right:0;
-          height:0 !important; min-height:0 !important; background:transparent !important;
-          box-shadow:none !important; z-index:999; overflow:visible !important; }
+      /* Keep the Streamlit header (so the collapsed-sidebar EXPAND arrow keeps
+         working) but make it transparent and hide only the toolbar / menu / status.
+         The header does not cover the banner because it is transparent. */
+      header[data-testid="stHeader"]{ background:transparent !important; box-shadow:none !important;
+          z-index:1000 !important; pointer-events:none; }
+      header[data-testid="stHeader"] *{ pointer-events:auto; }  /* keep controls clickable */
       [data-testid="stToolbar"], [data-testid="stStatusWidget"]{ display:none !important; }
       [data-testid="stDecoration"]{ display:none !important; }   /* thin rainbow bar at the very top */
-      /* the "open sidebar" (expand) arrow lives in the header — keep it clickable
-         and on top so a collapsed sidebar can always be reopened */
-      [data-testid="stExpandSidebarButton"]{ z-index:1000 !important; }
+      /* the "open sidebar" (expand) arrow lives in the header — raise it above the
+         banner and give it a visible slate pill so a collapsed sidebar can be reopened */
+      [data-testid="stExpandSidebarButton"]{ z-index:1001 !important; }
       [data-testid="stExpandSidebarButton"] button{ background:#42556a !important; color:#fff !important;
-          border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.25); }
+          border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.3); opacity:1 !important; }
       /* collapse invisible helper wrappers so they don't reserve blank space above
          the banner: injected <style> blocks (the CSS still applies globally) and the
          0-height auto-refresh iframe (its timer keeps running at zero height) */
