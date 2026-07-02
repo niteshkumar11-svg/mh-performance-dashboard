@@ -208,29 +208,38 @@ st.markdown(
 
       .block-container,[data-testid="stMainBlockContainer"],[data-testid="stAppViewBlockContainer"]{
           max-width:100% !important; padding:0.7rem 1.2rem 0.25rem !important; }
-      /* remove the Streamlit toolbar / header / menu / status widget entirely */
-      header[data-testid="stHeader"]{ display:none !important; }
+      /* Remove the toolbar/menu but KEEP the sidebar expand control usable: make the
+         header a zero-height transparent overlay so the banner still sits at the top
+         AND the collapsed-sidebar expand arrow still shows (top-left). */
+      header[data-testid="stHeader"]{ position:absolute !important; top:0; left:0; right:0;
+          height:0 !important; min-height:0 !important; background:transparent !important;
+          box-shadow:none !important; z-index:999; overflow:visible !important; }
       [data-testid="stToolbar"], [data-testid="stStatusWidget"]{ display:none !important; }
       [data-testid="stDecoration"]{ display:none !important; }   /* thin rainbow bar at the very top */
+      /* the "open sidebar" (expand) arrow lives in the header — keep it clickable
+         and on top so a collapsed sidebar can always be reopened */
+      [data-testid="stExpandSidebarButton"]{ z-index:1000 !important; }
+      [data-testid="stExpandSidebarButton"] button{ background:#42556a !important; color:#fff !important;
+          border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.25); }
       /* collapse invisible helper wrappers so they don't reserve blank space above
          the banner: injected <style> blocks (the CSS still applies globally) and the
          0-height auto-refresh iframe (its timer keeps running at zero height) */
       [data-testid="stMain"] [data-testid="stElementContainer"]:has(style){ display:none !important; }
       [data-testid="stMain"] [data-testid="stElementContainer"]:has(iframe[title*="autorefresh"]){
           height:0 !important; min-height:0 !important; margin:0 !important; overflow:hidden !important; }
-      /* Sidebar: a fixed slate panel with light-text menu items (both themes) */
-      [data-testid="stSidebar"]{ background:linear-gradient(180deg,#3b5169 0%,#2b3d4f 100%) !important;
-          border-right:1px solid rgba(0,0,0,.28); }
+      /* Sidebar: a medium-slate panel with light-text menu items (both themes) */
+      [data-testid="stSidebar"]{ background:linear-gradient(180deg,#54697e 0%,#42556a 100%) !important;
+          border-right:1px solid rgba(0,0,0,.22); }
       [data-testid="stSidebar"] h5, [data-testid="stSidebar"] label,
-      [data-testid="stSidebar"] p, [data-testid="stSidebar"] span{ color:#e7eef6 !important; }
-      [data-testid="stSidebar"] .sec-label{ color:#9fb3c8 !important; }
+      [data-testid="stSidebar"] p, [data-testid="stSidebar"] span{ color:#eaf0f7 !important; }
+      [data-testid="stSidebar"] .sec-label{ color:#c2cedb !important; }
       /* function / metric buttons: FLAT left-aligned menu items (like the reference);
          inactive = light text, selected = accent-blue text with an accent left bar */
       [data-testid="stSidebar"] .stButton>button{ background:transparent !important;
           border:none !important; border-left:3px solid transparent !important; box-shadow:none !important;
           border-radius:8px; justify-content:flex-start !important; text-align:left !important;
           padding:.42rem .7rem !important; font-weight:600; transition:all .12s ease; }
-      [data-testid="stSidebar"] .stButton>button *{ color:#cdd9e6 !important; text-align:left; }
+      [data-testid="stSidebar"] .stButton>button *{ color:#e8eef6 !important; text-align:left; }
       [data-testid="stSidebar"] .stButton>button:hover{ background:rgba(255,255,255,.08) !important;
           transform:none !important; }
       [data-testid="stSidebar"] .stButton>button:hover *{ color:#ffffff !important; }
