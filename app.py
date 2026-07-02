@@ -193,6 +193,12 @@ st.set_page_config(
 
 HDR_LABEL = "#a4c2f4"
 
+# Appearance toggle. Read here (before the theme CSS) so the styling matches; the
+# sidebar toggle widget shares the same session_state key, so a change is already
+# reflected in session_state at the top of the next rerun (no one-frame lag).
+st.session_state.setdefault("dark_mode", False)
+DARK = bool(st.session_state.dark_mode)
+
 st.markdown(
     """
     <style>
@@ -201,13 +207,13 @@ st.markdown(
       html, body, [data-testid="stAppViewContainer"] { font-family:'Inter', system-ui, sans-serif; }
 
       .block-container,[data-testid="stMainBlockContainer"],[data-testid="stAppViewBlockContainer"]{
-          max-width:100% !important; padding:0 1.2rem 0.25rem !important; }
-      header[data-testid="stHeader"]{ height:1.4rem; background:transparent; backdrop-filter:none; }
+          max-width:100% !important; padding:2.6rem 1.2rem 0.25rem !important; }
+      header[data-testid="stHeader"]{ background:transparent !important; backdrop-filter:none; }
       [data-testid="stDecoration"]{ display:none; }   /* thin rainbow bar at the very top */
       [data-testid="stSidebar"]{ background:#f7f9fc; border-right:1px solid var(--line); }
 
       .app-banner{ text-align:center; font-weight:800; font-size:1.45rem; letter-spacing:1.5px;
-          color:#fff; padding:.38rem 1rem; border-radius:12px; margin:-0.4rem 0 .25rem;
+          color:#fff; padding:.38rem 1rem; border-radius:12px; margin:0 0 .25rem;
           background:linear-gradient(135deg,#232323 0%,#000000 100%);
           box-shadow:0 4px 14px rgba(0,0,0,.32); }
       .sec-label{ font-weight:700; color:#64748b; font-size:.75rem; letter-spacing:.8px;
@@ -251,14 +257,14 @@ st.markdown(
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(7) .stButton>button{animation-delay:.26s}
       [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(8) .stButton>button{animation-delay:.30s}
 
-      .sheet-wrap{ overflow:auto; max-height:calc(100vh - 12rem); border:1.5px solid #000;
+      .sheet-wrap{ overflow:auto; max-height:calc(100vh - 12rem); border:1.5px solid var(--cell-border,#000);
           border-radius:8px; box-shadow:0 1px 4px rgba(16,42,74,.08); animation:fadeInUp .45s ease both; }
       /* width:100% so few-column tables stretch to fill the box; min-width:max-content
          keeps wide tables their natural width (horizontal scroll) */
       table.sheet{ border-collapse:separate; border-spacing:0; width:100%; min-width:max-content;
-          font-size:var(--fs,0.9rem); font-family:'Inter', system-ui, sans-serif; }
-      /* black "all borders" on every cell of every table */
-      table.sheet th, table.sheet td{ border:1px solid #000; padding:6px 11px; line-height:1.3;
+          font-size:var(--fs,0.9rem); font-family:'Inter', system-ui, sans-serif; color:var(--cell-fg,#1f2d3d); }
+      /* "all borders" on every cell of every table (theme-aware colour) */
+      table.sheet th, table.sheet td{ border:1px solid var(--cell-border,#000); padding:6px 11px; line-height:1.3;
           text-align:center; vertical-align:middle; white-space:nowrap; overflow-wrap:normal;
           min-width:var(--cw,6em); }
       table.sheet thead th{ position:sticky; top:0; z-index:2; font-weight:700; }
@@ -275,37 +281,39 @@ st.markdown(
 )
 
 
-# Force the dashboard's light appearance regardless of the browser / Streamlit
-# dark theme. The tables reproduce the sheet's own (light) colours with dark text,
-# so a dark surface makes them unreadable. We override Streamlit's theme CSS
-# variables and pin light backgrounds + dark default text; the banner and any
-# sheet-coloured cells keep their own explicit colours.
+# Theme: the dashboard controls its OWN light/dark palette via CSS variables (the
+# sidebar "Dark mode" toggle sets DARK). We override Streamlit's theme variables so
+# the whole app — chrome AND tables — follows our palette regardless of the browser
+# or Streamlit theme. Sheet-coloured cells keep their own text colour (set inline,
+# keyed to the cell's own background) so they stay readable in either mode.
+_PALETTE = ("--page-bg:#0e1117; --side-bg:#161a23; --ink:#e6e9ef; --muted:#9aa4b2; "
+            "--cell-bg:#0e1117; --cell-fg:#e6e9ef; --cell-border:#3a414d; --line:#2a2f3a;"
+            if DARK else
+            "--page-bg:#ffffff; --side-bg:#f7f9fc; --ink:#102a4a; --muted:#64748b; "
+            "--cell-bg:#ffffff; --cell-fg:#1f2d3d; --cell-border:#000000; --line:#dbe2ea;")
+_SCHEME = "dark" if DARK else "light"
 st.markdown(
-    """
+    f"""
     <style>
-      html{ color-scheme:light !important; }
-      :root, .stApp, [data-testid="stApp"]{
-          --background-color:#ffffff !important;
-          --secondary-background-color:#eef2f7 !important;
-          --text-color:#1f2d3d !important;
-          --default-textColor:#1f2d3d !important;
-          --border-color:#cbd5e1 !important;
-          color-scheme:light !important; }
+      html{{ color-scheme:{_SCHEME} !important; }}
+      :root, .stApp, [data-testid="stApp"]{{
+          {_PALETTE}
+          --background-color:var(--page-bg) !important;
+          --secondary-background-color:var(--side-bg) !important;
+          --text-color:var(--ink) !important;
+          color-scheme:{_SCHEME} !important; }}
       .stApp, [data-testid="stApp"], [data-testid="stAppViewContainer"],
-      [data-testid="stMain"], [data-testid="stMainBlockContainer"],
-      [data-testid="stHeader"], [data-testid="stBottom"]{
-          background-color:#ffffff !important; color:#1f2d3d; }
+      [data-testid="stMain"], [data-testid="stMainBlockContainer"], [data-testid="stBottom"]{{
+          background-color:var(--page-bg) !important; color:var(--ink); }}
+      /* keep the top toolbar transparent so it never covers the banner */
+      [data-testid="stHeader"]{{ background:transparent !important; }}
       [data-testid="stSidebar"], [data-testid="stSidebarContent"],
-      [data-testid="stSidebarUserContent"]{
-          background-color:#f7f9fc !important; color:#1f2d3d; }
-      /* Streamlit widgets that follow the theme: tabs, captions, markdown text */
-      [data-baseweb="tab"]{ color:#1f2d3d !important; }
-      [data-testid="stMarkdownContainer"], [data-testid="stCaptionContainer"]{ color:#1f2d3d; }
-      /* the table stays a self-contained light island; inline white text on dark
-         sheet-coloured cells still wins (it is set as an inline style) */
-      .sheet-wrap{ background:#ffffff; }
-      table.sheet{ color:#1f2d3d; background:#ffffff; }
-      table.sheet th, table.sheet td{ color:#1f2d3d; }
+      [data-testid="stSidebarUserContent"]{{ background-color:var(--side-bg) !important; color:var(--ink); }}
+      [data-baseweb="tab"]{{ color:var(--ink) !important; }}
+      [data-testid="stMarkdownContainer"], [data-testid="stCaptionContainer"]{{ color:var(--ink); }}
+      .metric-title{{ color:var(--ink) !important; }}
+      .sheet-wrap{{ background:var(--cell-bg); }}
+      table.sheet{{ color:var(--cell-fg); }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -323,7 +331,9 @@ def _text_color(hexc: str) -> str:
     if not isinstance(hexc, str) or len(hexc) != 7 or not hexc.startswith("#"):
         return ""
     r, g, b = int(hexc[1:3], 16), int(hexc[3:5], 16), int(hexc[5:7], 16)
-    return "#ffffff" if (0.299 * r + 0.587 * g + 0.114 * b) < 140 else ""
+    # explicit text colour keyed to the CELL's own bg (not the app theme) so a
+    # sheet-coloured cell stays readable in both light and dark mode
+    return "#ffffff" if (0.299 * r + 0.587 * g + 0.114 * b) < 140 else "#1f2d3d"
 
 
 def _bg_style(bg: str) -> str:
@@ -344,7 +354,7 @@ def _frozen(pos: int, frozen_cols: int, is_header: bool, bg: str, w: float) -> s
     s = (f"position:sticky;left:{round(pos * w, 2)}em;width:{w}em;min-width:{w}em;max-width:{w}em;"
          f"white-space:normal;overflow-wrap:anywhere;z-index:{4 if is_header else 1};")
     if not bg:
-        s += "background-color:#ffffff;"
+        s += "background-color:var(--cell-bg,#ffffff);color:var(--cell-fg,#1f2d3d);"
     return s
 
 
@@ -702,6 +712,10 @@ rf_sec = _RF[rf_choice]
 tick = 0
 if rf_sec and _HAS_AUTOREFRESH:
     tick = st_autorefresh(interval=rf_sec * 1000, key="auto_rf")
+
+# Light/Dark appearance (read at the top of the script as DARK; toggling reruns)
+st.sidebar.toggle("🌙 Dark mode", key="dark_mode",
+                  help="Switch the whole dashboard between light and dark.")
 
 st.sidebar.divider()
 # functions + metrics navigation (kept below the refresh controls)
